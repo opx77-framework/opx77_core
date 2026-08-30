@@ -1,0 +1,51 @@
+{
+  "$schema": "https://raw.githubusercontent.com/LuaLS/vscode-lua/master/setting/schema.json",
+  "runtime.version": "Lua 5.4",
+  "runtime.pathStrict": true,
+  "runtime.path": [
+    "?.lua",
+    "?/init.lua"
+  ],
+  "workspace.checkThirdParty": false,
+  "diagnostics.globals": [
+    "Synk",
+    "Open77",
+    "source",
+    "CreateThread",
+    "Wait",
+    "SetTimeout",
+    "ClearTimeout",
+    "GetGameTimer",
+    "AddEventHandler",
+    "TriggerEvent",
+    "RegisterNetEvent",
+    "TriggerServerEvent",
+    "TriggerClientEvent",
+    "RegisterCommand",
+    "GetCurrentResourceName",
+    "GetPlayerIdentifier",
+    "GetPlayerName",
+    "DropPlayer",
+    "BanPlayer",
+    "exports",
+    "json",
+    "GetInvokingResource",
+    "GetInvokingResourceGeneration",
+    "SynkConfig"
+  ],
+  "diagnostics.disable": [
+    "lowercase-global"
+  ],
+  "diagnostics.severity": {
+    "undefined-global": "Error",
+    "unused-local": "Warning",
+    "unused-function": "Warning"
+  },
+  "format.enable": true,
+  "format.defaultConfig": {
+    "indent_style": "space",
+    "indent_size": "2",
+    "max_line_length": "100",
+    "quote_style": "double"
+  }
+}

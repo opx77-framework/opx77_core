@@ -1,20 +1,22 @@
 # synk_core
 
-The core resource of **SYNK**, providing the essential systems and APIs required to build resources and gameplay for CyberMP.
+The core resource of **SYNK**, providing the essential systems and APIs required to build resources and gameplay for Open77.
 
 SYNK Core is designed to provide a **simple, flexible, and reliable foundation** for developers. It handles the core functionality that resources can build upon while keeping the framework lightweight and easy to extend.
 
 ## Community & Support
 
-Join the CyberMP and SYNK communities to discover the platform, share your projects, and connect with other developers.
+Join the Open77 and SYNK communities to discover the platform, share your projects, and connect with other developers.
 
-* [CyberMP](https://cyber.mp)
-* [CyberMP GitHub](https://github.com/Cyber-MP)
-* [Synk Discord](https://discord.gg/synk)
+<!-- TODO: replace with the final URLs before publication. -->
+
+* [Open77](#)
+* [Open77 GitHub](#)
+* [Synk Discord](#)
 
 ## License
 
-SYNK is licensed under the [**MIT License**](../LICENSE).
+SYNK is licensed under the [**MIT License**](LICENSE).
 
 Copyright © 2026 **Luis MOUTA**.
 

@@ -1,0 +1,12 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "SYNK: compiler tous les fichiers",
+      "type": "shell",
+      "command": "find shared server client -name '*.lua' -exec luac -p {} +",
+      "group": "build",
+      "problemMatcher": []
+    }
+  ]
+}

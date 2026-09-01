@@ -27,13 +27,17 @@ end
 --- character changed and the autosave carries it. A character at zero stays at zero; the
 --- damage below is what running out costs, not a further drop.
 local function tick()
-  -- an array, so ipairs says what it is
-  for _, player in ipairs(OPX.GetPlayers()) do
+  local players = OPX.GetPlayers()
+  for index = 1, #players do
+    local player = players[index]
     local data = player.PlayerData
     local metadata = data.metadata or {}
-    local emptied = {}
+    -- counted, not collected: only the number was ever read, and a list built for it was a
+    -- table per character per tick that nothing looked inside
+    local emptied = 0
 
-    for _, need in ipairs(NEEDS) do
+    for position = 1, #NEEDS do
+      local need = NEEDS[position]
       local held = finite(metadata[need])
       local rule = Config[need]
       if held ~= nil and type(rule) == "table" then
@@ -41,15 +45,15 @@ local function tick()
         -- wait for the first person to reach for it in this scope
         local left = math.max(0, held - (tonumber(rule.PER_TICK) or 0))
         if left ~= held then player.Functions.SetMetaData(need, left) end
-        if left <= 0 then emptied[#emptied + 1] = need end
+        if left <= 0 then emptied = emptied + 1 end
       end
     end
 
-    if #emptied > 0 and Config.DAMAGE_AT_ZERO > 0 then
+    if emptied > 0 and Config.DAMAGE_AT_ZERO > 0 then
       local health = finite(metadata.health)
       if health ~= nil and health > 0 then
         player.Functions.SetMetaData("health",
-          math.max(0, health - Config.DAMAGE_AT_ZERO * #emptied))
+          math.max(0, health - Config.DAMAGE_AT_ZERO * emptied))
       end
     end
   end

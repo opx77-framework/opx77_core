@@ -8,8 +8,10 @@
   ],
   "workspace.checkThirdParty": false,
   "diagnostics.globals": [
-    "Synk",
+    "OPX",
+    "locale",
     "Open77",
+    "MySQL",
     "source",
     "CreateThread",
     "Wait",
@@ -17,21 +19,26 @@
     "ClearTimeout",
     "GetGameTimer",
     "AddEventHandler",
+    "RemoveEventHandler",
     "TriggerEvent",
     "RegisterNetEvent",
     "TriggerServerEvent",
     "TriggerClientEvent",
     "RegisterCommand",
     "GetCurrentResourceName",
+    "GetResourceState",
     "GetPlayerIdentifier",
     "GetPlayerName",
-    "DropPlayer",
-    "BanPlayer",
+    "GetPlayerPosition",
+    "GetResourceKvp",
+    "SetResourceKvp",
+    "DeleteResourceKvp",
     "exports",
     "json",
+    "print",
+    "require",
     "GetInvokingResource",
-    "GetInvokingResourceGeneration",
-    "SynkConfig"
+    "GetInvokingResourceGeneration"
   ],
   "diagnostics.disable": [
     "lowercase-global"
@@ -47,5 +54,8 @@
     "indent_size": "2",
     "max_line_length": "100",
     "quote_style": "double"
-  }
+  },
+  "workspace.ignoreDir": [
+    ".claude"
+  ]
 }

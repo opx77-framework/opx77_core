@@ -15,5 +15,5 @@ acl.jsonc
 # Agent tooling: 16 MB of skills, two of them nested git repos
 .claude/
 
-# Notes and platform research: not published yet
-docs/
+# docs/ is published: docs/architecture.md is the design rationale and the
+# README points at it, so a clone without it is missing the explanation.

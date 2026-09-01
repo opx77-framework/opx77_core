@@ -1,58 +1,41 @@
---- Client entry point. Presentation only: every decision that matters is made
---- on the server, and anything reported from here is a hint the server
---- re-derives, never a fact.
+--- Client state: presentation and intent only. Anything reported from here is a hint the
+--- server re-derives. This half draws nothing -- pixels belong in satellite client resources
+--- reaching it through `Open77.exports.call("opx77_core", ...)`.
 
-require("shared.init")
+local log = OPX.Log.scope("client")
 
-local Events = require("shared.events")
-local Log = require("shared.log")
-local state = require("client.state")
+--- The server's copy, mirrored. Empty until a character is loaded.
+--- Nothing captures this into a local: a handler replaces the table wholesale on login.
+---@type PlayerData|table
+OPX.PlayerData = {}
 
---- Publishing the export surface is a side effect of this require, which is
---- why it sits on its own line rather than among the locals above.
-require("client.exports")
+--- The selection roster: what the server last sent.
+OPX.Characters = {
+  ---@type CharacterSummary[]
+  list = {},
+  ---@type integer
+  slots = 0,
+  ---@type table<string, table>
+  origins = {},
+}
 
-local log = Log.scope("client")
+--- True between `playerLoaded` and `playerUnloaded`.
+OPX.IsLoggedIn = false
 
-RegisterNetEvent(Events.toClient.characters, function(characters)
-  state.characters = characters or {}
-  log.info(("%d character(s) available"):format(#state.characters))
-end)
+--- Announces this client to the server. Called on resource start, which is what makes a core
+--- reload survivable: the server's roster is empty and `onPlayerConnected` does not re-fire.
+function OPX.Announce()
+  TriggerServerEvent(OPX.Events.Server.READY)
+end
 
-RegisterNetEvent(Events.toClient.entered, function(payload)
-  state.characterId = payload and payload.characterId
-  log.info(("entered as character %s"):format(tostring(state.characterId)))
-end)
-
-RegisterNetEvent(Events.toClient.notify, function(payload)
-  log.warn(("server refused: %s"):format(payload and tostring(payload.code) or "?"))
-end)
-
---- Console entry, until the selection surface lands.
-RegisterCommand("synk.select", function(_, args)
-  local characterId = tonumber(args and args[1])
-  if not characterId then return log.warn("usage: synk.select <characterId>") end
-  TriggerServerEvent(Events.toServer.selectCharacter, { characterId = characterId })
-end, false)
-
-RegisterCommand("synk.create", function(_, args)
-  if not (args and args[1] and args[2]) then
-    return log.warn("usage: synk.create <firstName> <lastName>")
-  end
-  TriggerServerEvent(Events.toServer.createCharacter,
-    { firstName = args[1], lastName = args[2] })
-end, false)
-
-RegisterCommand("synk.characters", function()
-  local characters = state.characters
-  for i = 1, #characters do
-    local character = characters[i]
-    log.info(("  %s  %s %s")
-      :format(character.publicCode, character.firstName, character.lastName))
-  end
-end, false)
-
-AddEventHandler(Events.platform.resourceStart, function(name)
+AddEventHandler(OPX.Events.Platform.RESOURCE_START, function(name)
   if name ~= GetCurrentResourceName() then return end
-  log.info(("SYNK client %s ready"):format(Synk.VERSION))
+  OPX.Log.setLevel(OPX.Config.SHARED.LOG_LEVEL)
+  log.info(("opx77_core %s client ready"):format(OPX.VERSION))
+  OPX.Announce()
+end)
+
+AddEventHandler(OPX.Events.Platform.WORLD_READY, function()
+  -- announced again: a client can start before the world is up, and the server throttles this
+  OPX.Announce()
 end)

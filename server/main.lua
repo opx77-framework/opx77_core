@@ -1,110 +1,156 @@
---- Server entry point. Load order is the contract: shared table, kernel, then
---- every module file (each calls `Synk.module` at file scope), then boot.
---- A module not required below simply does not exist.
+--- The roster, and boot. A session is a connected machine; a Player is a loaded character.
 
-require("shared.init")
+local log = OPX.Log.scope("core")
 
-local Kernel = require("server.kernel.init")
-local Result = require("shared.result")
-local Validate = require("shared.validate")
-local Events = require("shared.events")
-local Log = require("shared.log")
+--- playerId -> session. Everyone connected, character or not.
+---@type table<Source, Session>
+OPX.Sessions = {}
 
--- `Synk.module` has to exist before a module file runs.
-Synk.module = Kernel.module
+--- playerId -> Player. Only those with a character loaded.
+---@type table<Source, Player>
+OPX.Players = {}
 
--- ── Modules ───────────────────────────────────────────────────────────────
--- Add one line per module. Order is irrelevant: the kernel sorts by `requires`.
-require("server.modules.characters.init")
+--- Reverse lookups, so the getters in server/functions.lua resolve in O(1). Maintained by
+--- RegisterPlayer / UnregisterPlayer only.
+OPX.PlayerRegistry = {
+  ---@type table<CitizenId, Source>
+  byCitizenId = {},
+  ---@type table<UserId, Source>
+  byUserId = {},
+}
 
-local log = Log.scope("main")
+-- resolved once and kept, and only on a hit: during boot the global may not be installed
+-- yet, and a cached nil would make every later call answer "nobody is there"
+local identifierOf
 
---- `source` comes from the authenticated connection and is the only field in
---- a network handler a client cannot forge.
-local function sessionOf()
-  local playerId = tonumber(source)
-  if not playerId then return Result.err("no-source") end
-  return Kernel.sessions:get(playerId)
+local function userIdOf(playerId)
+  if identifierOf then return identifierOf(playerId) end
+  local fn = rawget(_G, "GetPlayerIdentifier")
+  if not fn then return nil end
+  identifierOf = fn
+  return fn(playerId)
 end
 
---- A refusal the client can show, without leaking detail.
-local function refuse(playerId, code)
-  TriggerClientEvent(Events.toClient.notify, playerId, { kind = "error", code = code })
+---@type fun(playerId: Source): UserId|nil
+OPX.UserIdOf = userIdOf
+
+local function displayNameOf(playerId)
+  local fn = rawget(_G, "GetPlayerName")
+  return fn and fn(playerId) or nil
 end
 
-RegisterNetEvent(Events.toServer.selectCharacter, function(payload)
-  local session = sessionOf()
-  if not session.ok then return end
-  local playerId = session.value.playerId
+--- The session for `playerId`, created if this VM has not seen them and dropped if the slot
+--- now belongs to somebody else. Everything that wants a session goes through here, which is
+--- what makes the recycling check unskippable.
+---@param playerId Source|string
+---@return Session|nil
+function OPX.EnsureSession(playerId)
+  playerId = tonumber(playerId)
+  if not playerId or playerId <= 0 then return nil end
 
-  local characterId = Validate.number(payload and payload.characterId,
-    { integer = true, min = 1 })
-  if not characterId.ok then return refuse(playerId, "bad-request") end
-
-  local characters = Kernel.registry:get("characters")
-  if not characters then return refuse(playerId, "unavailable") end
-
-  local claimed = characters.claim(session.value, characterId.value)
-  if not claimed.ok then
-    log.warn(("%d could not claim character %d: %s")
-      :format(playerId, characterId.value, tostring(claimed.error)))
-    return refuse(playerId, claimed.error)
+  local userId = userIdOf(playerId)
+  if userId == nil or userId == "" then
+    -- no verified identity: nothing may be attributed to them
+    OPX.ForgetSession(playerId)
+    return nil
   end
 
-  TriggerClientEvent(Events.toClient.entered, playerId, { characterId = claimed.value })
-end)
-
-RegisterNetEvent(Events.toServer.createCharacter, function(payload)
-  local session = sessionOf()
-  if not session.ok then return end
-  local playerId = session.value.playerId
-
-  local characters = Kernel.registry:get("characters")
-  if not characters then return refuse(playerId, "unavailable") end
-
-  local created = characters.create(session.value.userId,
-    payload and payload.firstName, payload and payload.lastName)
-  if not created.ok then
-    return refuse(playerId, created.error)
+  local session = OPX.Sessions[playerId]
+  if session then
+    if session.userId == userId then return session end
+    log.warn(("slot %d now belongs to a different account, evicting"):format(playerId))
+    OPX.ForgetSession(playerId)
   end
 
-  local claimed = characters.claim(session.value, created.value.id)
-  if not claimed.ok then return refuse(playerId, claimed.error) end
+  session = {
+    source = playerId,
+    userId = userId,
+    displayName = displayNameOf(playerId) or "",
+    connectedAt = OPX.Now(),
+    gateSession = nil, -- set by server/lifecycle.lua while the readiness gate is held
+    charactersSent = false, -- set by server/character.lua, so a second request is cheap
+  }
+  OPX.Sessions[playerId] = session
+  return session
+end
 
-  TriggerClientEvent(Events.toClient.entered, playerId, {
-    characterId = created.value.id,
-    publicCode = created.value.publicCode,
-  })
-end)
+--- Drops a session and, with it, any player still attached to the slot.
+---@param playerId Source
+function OPX.ForgetSession(playerId)
+  local player = OPX.Players[playerId]
+  if player then OPX.UnregisterPlayer(player) end
+  OPX.Sessions[playerId] = nil
+end
 
---- Diagnostics: the fastest way to answer "why is this player stuck".
-RegisterCommand("synk.where", function(commandSource, args)
-  local target = tonumber(args and args[1]) or tonumber(commandSource)
-  if not target then return print("usage: synk.where <playerId>") end
+--- Puts a loaded character into the roster and both reverse indexes.
+---@param player Player
+function OPX.RegisterPlayer(player)
+  local data = player.PlayerData
+  OPX.Players[data.source] = player
+  OPX.PlayerRegistry.byCitizenId[data.citizenId] = data.source
+  OPX.PlayerRegistry.byUserId[data.userId] = data.source
+end
 
-  local session = Kernel.sessions:get(target)
-  if not session.ok then
-    return print(("player %d: no session (%s)"):format(target, tostring(session.error)))
+--- Takes it back out. Each index entry is removed only if it still points at this player: a
+--- reconnecting account has both sessions in the roster for a moment.
+---@param player Player
+function OPX.UnregisterPlayer(player)
+  local data = player.PlayerData
+  OPX.Players[data.source] = nil
+  if OPX.PlayerRegistry.byCitizenId[data.citizenId] == data.source then
+    OPX.PlayerRegistry.byCitizenId[data.citizenId] = nil
   end
-  print(("player %d: user=%s character=%s")
-    :format(target, session.value.userId, tostring(session.value.characterId)))
-end, true)
-
-RegisterCommand("synk.status", function()
-  local live = Kernel.sessions:all()
-  print(("SYNK %s — %d session(s)"):format(Synk.VERSION, #live))
-  for i = 1, #live do
-    local session = live[i]
-    print(("  %d  %s  character=%s")
-      :format(session.playerId, session.userId, tostring(session.characterId)))
+  if OPX.PlayerRegistry.byUserId[data.userId] == data.source then
+    OPX.PlayerRegistry.byUserId[data.userId] = nil
   end
-end, true)
+end
 
+--- Warns once per conflicting resource that is actually running. `GetResourceState` is the
+--- only way to ask: server resources cannot call each other.
+local function warnAboutPlacementConflicts()
+  local names = OPX.Config.SERVER.CONFLICTING_PLACERS
+  local mine = GetCurrentResourceName()
+  for i = 1, #names do
+    local name = names[i]
+    -- "starting" counts: a resource coming up will be placing players a moment from now
+    local state = GetResourceState(name)
+    if name ~= mine and (state == "running" or state == "starting") then
+      log.warn(("%s is running and also places players"):format(name))
+      log.warn("  two resources moving the same player means the last one wins, with no")
+      log.warn("  rule saying which. See CONFLICTING_PLACERS in config/server.lua.")
+    end
+  end
+end
+
+--- Everything that has to happen before the first player may log in. On its own thread:
+--- migrations block on database round trips and the main chunk has to return promptly.
 CreateThread(function()
-  -- On a thread: migrations block on database round-trips and the main chunk
-  -- must return promptly.
-  local booted = Kernel.boot({ logLevel = "info" })
-  if not booted.ok then
-    log.error(("SYNK did not start: %s"):format(tostring(booted.error)))
+  OPX.Log.setLevel(OPX.Config.SHARED.LOG_LEVEL)
+  log.info(("opx77_core %s starting"):format(OPX.VERSION))
+
+  local ready = OPX.Storage.ready()
+  if ready then
+    local migrated = OPX.Storage.migrate(OPX.Schema)
+    if not migrated.ok then
+      OPX.BootError = "migration failed: " .. tostring(migrated.error)
+      log.error("refusing to accept logins against an unknown schema")
+    end
+  else
+    OPX.BootError = "no database"
+  end
+
+  warnAboutPlacementConflicts()
+
+  if not OPX.Config.SHARED.DEFAULT_SPAWN.SET then
+    log.warn("DEFAULT_SPAWN.SET is false in config/shared.lua")
+    log.warn("  characters with no stored position will be left where the game put them.")
+    log.warn("  run `opx77.here` in game to print a coordinate in the right shape.")
+  end
+
+  if OPX.BootError then
+    log.error(("opx77_core %s is up but cannot load characters: %s")
+      :format(OPX.VERSION, OPX.BootError))
+  else
+    log.info(("opx77_core %s ready"):format(OPX.VERSION))
   end
 end)

@@ -1,24 +1,19 @@
---- Scoped logging over `Open77.log`, which already prefixes the resource name.
---- Falls back to `print` when the namespace is missing: a logger that throws
---- during boot hides the error you are trying to read.
+--- Levelled logging over `Open77.log`, falling back to `print` when the namespace is missing.
 
 local Log = {}
 
 local LEVELS = { debug = 1, info = 2, warn = 3, error = 4, silent = 99 }
 local threshold = LEVELS.info
 
---- Resolved once per level, then reused: every line otherwise paid a global
---- read and three indexations. A miss is deliberately *not* cached -- during
---- boot `Open77` may not exist yet, and caching `print` then would keep every
---- later line out of the platform log.
 local sinks = {}
 
 local function sink(level)
   local cached = sinks[level]
   if cached then return cached end
 
-  local ns = rawget(_G, "Open77")
-  local fn = ns and ns.log and ns.log[level]
+  local open77 = rawget(_G, "Open77")
+  local fn = open77 and open77.log and open77.log[level]
+  -- a miss is not cached: caching `print` during boot would strand every later line
   if not fn then return print end
 
   sinks[level] = fn
@@ -32,12 +27,22 @@ local function write(level, scope, ...)
   sink(level)(("[%s] %s"):format(scope, table.concat(parts, " ", 1, parts.n)))
 end
 
+---@param level "debug" | "info" | "warn" | "error" | "silent"
 function Log.setLevel(level)
   threshold = LEVELS[level] or LEVELS.info
 end
 
---- Modules take one of these instead of the global, so output is attributable
---- without every call site repeating a prefix.
+---@return string
+function Log.level()
+  for name, value in pairs(LEVELS) do
+    if value == threshold then return name end
+  end
+  return "info"
+end
+
+--- A named logger, so a line is attributable without every call site repeating its prefix.
+---@param scope string
+---@return LogScope
 function Log.scope(scope)
   return {
     debug = function(...) write("debug", scope, ...) end,
@@ -47,4 +52,10 @@ function Log.scope(scope)
   }
 end
 
-return Log
+--- Unscoped shorthands, for one-off lines that do not belong to a subsystem.
+function Log.debug(...) write("debug", "opx77", ...) end
+function Log.info(...) write("info", "opx77", ...) end
+function Log.warn(...) write("warn", "opx77", ...) end
+function Log.error(...) write("error", "opx77", ...) end
+
+OPX.Log = Log

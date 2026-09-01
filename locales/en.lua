@@ -1,11 +1,48 @@
-return {
-  ["character.limit"]      = "You already have {max} characters.",
-  ["character.notYours"]   = "That character is not yours.",
-  ["character.notFound"]   = "No character with that code.",
-  ["character.badName"]    = "That name cannot be used.",
-  ["character.created"]    = "Character created. Your code is {code}.",
-  ["entry.failed"]         = "Could not bring you into the world. Try reconnecting.",
-  ["entry.noIdentity"]     = "Your identity could not be verified.",
-  ["error.unavailable"]    = "That is unavailable right now.",
-  ["error.badRequest"]     = "That request was not understood.",
-}
+OPX.Locale.register("en", {
+  ["character.limit"]        = "You already have {max} characters.",
+  ["character.rowLimit"]     = "This account has created as many characters as it may.",
+  ["character.notYours"]     = "That character is not yours.",
+  ["character.notFound"]     = "No character carries that citizen ID.",
+  ["character.badName"]      = "That name cannot be used.",
+  ["character.badOrigin"]    = "That is not a valid lifepath.",
+  ["character.created"]      = "Character created. Your citizen ID is {citizenId}.",
+  ["character.deleted"]      = "Character deleted.",
+  ["character.inUse"]        = "That character is already in the world.",
+
+  ["vehicle.notFound"]      = "No vehicle carries that plate.",
+  ["vehicle.limit"]         = "This character owns as many vehicles as it may.",
+  ["vehicle.spawned"]       = "Vehicle {plate} brought out.",
+  ["vehicle.stored"]        = "Vehicle {plate} put away.",
+  ["vehicle.notSpawned"]    = "That vehicle is not out.",
+  ["vehicle.noPosition"]    = "You have no position to spawn beside.",
+  ["vehicle.spawnRefused"]  = "The vehicle could not be created.",
+
+  ["egg.claimed"]           = "Nice find. €$ {amount} is yours.",
+  ["egg.already"]           = "You have already found that one.",
+
+  ["entry.failed"]           = "Could not bring you into Night City. Try reconnecting.",
+  ["entry.noIdentity"]       = "Your identity could not be verified.",
+  ["entry.timedOut"]         = "You took too long to choose a character.",
+
+  ["money.added"]            = "+{amount} {type}",
+  ["money.removed"]          = "-{amount} {type}",
+  ["money.insufficient"]     = "You do not have enough {type}.",
+  ["money.paycheck"]         = "You received {amount} eddies for {job}.",
+  ["money.noPaycheckOffDuty"] = "No paycheck: you are off duty.",
+
+  ["job.updated"]            = "You are now {grade} at {job}.",
+  ["job.notFound"]           = "No such job.",
+  ["job.gradeNotFound"]      = "That job has no such grade.",
+  ["job.onDuty"]             = "You are on duty.",
+  ["job.offDuty"]            = "You are off duty.",
+
+  ["gang.updated"]           = "You are now {grade} in {gang}.",
+  ["gang.notFound"]          = "No such gang.",
+  ["gang.gradeNotFound"]     = "That gang has no such grade.",
+
+  ["error.unavailable"]      = "That is unavailable right now.",
+  ["error.badRequest"]       = "That request was not understood.",
+  ["error.tooFast"]          = "Slow down and try again in a moment.",
+  ["error.notLoggedIn"]      = "You are not in the world yet.",
+  ["error.noPermission"]     = "You are not allowed to do that.",
+})

@@ -1,11 +1,48 @@
-return {
-  ["character.limit"]      = "Vous avez déjà {max} personnages.",
-  ["character.notYours"]   = "Ce personnage ne vous appartient pas.",
-  ["character.notFound"]   = "Aucun personnage ne porte ce code.",
-  ["character.badName"]    = "Ce nom ne peut pas être utilisé.",
-  ["character.created"]    = "Personnage créé. Votre code est {code}.",
-  ["entry.failed"]         = "Impossible de vous faire entrer. Reconnectez-vous.",
-  ["entry.noIdentity"]     = "Votre identité n'a pas pu être vérifiée.",
-  ["error.unavailable"]    = "Indisponible pour le moment.",
-  ["error.badRequest"]     = "Requête incomprise.",
-}
+OPX.Locale.register("fr", {
+  ["character.limit"]        = "Vous avez déjà {max} personnages.",
+  ["character.rowLimit"]     = "Ce compte a créé autant de personnages qu'il le peut.",
+  ["character.notYours"]     = "Ce personnage ne vous appartient pas.",
+  ["character.notFound"]     = "Aucun personnage ne porte cet identifiant citoyen.",
+  ["character.badName"]      = "Ce nom ne peut pas être utilisé.",
+  ["character.badOrigin"]    = "Ce parcours de vie n'existe pas.",
+  ["character.created"]      = "Personnage créé. Votre identifiant citoyen est {citizenId}.",
+  ["character.deleted"]      = "Personnage supprimé.",
+  ["character.inUse"]        = "Ce personnage est déjà en jeu.",
+
+  ["vehicle.notFound"]      = "Aucun véhicule ne porte cette plaque.",
+  ["vehicle.limit"]         = "Ce personnage possède déjà autant de véhicules qu'il le peut.",
+  ["vehicle.spawned"]       = "Véhicule {plate} sorti.",
+  ["vehicle.stored"]        = "Véhicule {plate} rangé.",
+  ["vehicle.notSpawned"]    = "Ce véhicule n'est pas sorti.",
+  ["vehicle.noPosition"]    = "Aucune position pour faire apparaître le véhicule.",
+  ["vehicle.spawnRefused"]  = "Le véhicule n'a pas pu être créé.",
+
+  ["egg.claimed"]           = "Bien vu. €$ {amount} pour toi.",
+  ["egg.already"]           = "Tu as déjà trouvé celui-là.",
+
+  ["entry.failed"]           = "Impossible de vous faire entrer dans Night City. Reconnectez-vous.",
+  ["entry.noIdentity"]       = "Votre identité n'a pas pu être vérifiée.",
+  ["entry.timedOut"]         = "Vous avez mis trop de temps à choisir un personnage.",
+
+  ["money.added"]            = "+{amount} {type}",
+  ["money.removed"]          = "-{amount} {type}",
+  ["money.insufficient"]     = "Vous n'avez pas assez de {type}.",
+  ["money.paycheck"]         = "Vous avez reçu {amount} eddies pour {job}.",
+  ["money.noPaycheckOffDuty"] = "Pas de paie : vous n'êtes pas en service.",
+
+  ["job.updated"]            = "Vous êtes maintenant {grade} chez {job}.",
+  ["job.notFound"]           = "Ce métier n'existe pas.",
+  ["job.gradeNotFound"]      = "Ce métier n'a pas ce grade.",
+  ["job.onDuty"]             = "Vous êtes en service.",
+  ["job.offDuty"]            = "Vous n'êtes plus en service.",
+
+  ["gang.updated"]           = "Vous êtes maintenant {grade} chez {gang}.",
+  ["gang.notFound"]          = "Ce gang n'existe pas.",
+  ["gang.gradeNotFound"]     = "Ce gang n'a pas ce grade.",
+
+  ["error.unavailable"]      = "Indisponible pour le moment.",
+  ["error.badRequest"]       = "Requête incomprise.",
+  ["error.tooFast"]          = "Trop vite -- reessayez dans un instant.",
+  ["error.notLoggedIn"]      = "Vous n'êtes pas encore en jeu.",
+  ["error.noPermission"]     = "Vous n'avez pas le droit de faire ça.",
+})

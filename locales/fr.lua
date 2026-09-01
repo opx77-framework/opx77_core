@@ -17,9 +17,6 @@ OPX.Locale.register("fr", {
   ["vehicle.noPosition"]    = "Aucune position pour faire apparaître le véhicule.",
   ["vehicle.spawnRefused"]  = "Le véhicule n'a pas pu être créé.",
 
-  ["egg.claimed"]           = "Bien vu. €$ {amount} pour toi.",
-  ["egg.already"]           = "Tu as déjà trouvé celui-là.",
-
   ["entry.failed"]           = "Impossible de vous faire entrer dans Night City. Reconnectez-vous.",
   ["entry.noIdentity"]       = "Votre identité n'a pas pu être vérifiée.",
   ["entry.timedOut"]         = "Vous avez mis trop de temps à choisir un personnage.",

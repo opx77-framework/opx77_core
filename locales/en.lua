@@ -17,9 +17,6 @@ OPX.Locale.register("en", {
   ["vehicle.noPosition"]    = "You have no position to spawn beside.",
   ["vehicle.spawnRefused"]  = "The vehicle could not be created.",
 
-  ["egg.claimed"]           = "Nice find. €$ {amount} is yours.",
-  ["egg.already"]           = "You have already found that one.",
-
   ["entry.failed"]           = "Could not bring you into Night City. Try reconnecting.",
   ["entry.noIdentity"]       = "Your identity could not be verified.",
   ["entry.timedOut"]         = "You took too long to choose a character.",

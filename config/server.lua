@@ -24,12 +24,6 @@ OPX.Config.SERVER = {
     thirst = { PER_TICK = 1.4 }, -- thirst outruns hunger, as in every survival system
   },
 
-  --- An easter egg: `/dop` pays once per ACCOUNT, ever. Set REWARD to 0 to turn it off.
-  EASTER_EGG = {
-    COMMAND = "dop", -- the command name, or false to register none
-    REWARD = 20, -- eddies, paid the first time and never again
-  },
-
   CHARACTERS = {
     DEFAULT_SLOTS = 3, -- how many characters one account may hold
 

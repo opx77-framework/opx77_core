@@ -97,24 +97,4 @@ CREATE TABLE IF NOT EXISTS opx77_vehicles (
       ]],
     },
   },
-
-  {
-    name = "0005_claims",
-    statements = {
-      -- keyed on user_id, not citizen_id: a reward offered once per PERSON must survive them
-      -- deleting the character that claimed it and making another
-      [[
-CREATE TABLE IF NOT EXISTS opx77_claims (
-    user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    code VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
-    citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NULL DEFAULT NULL,
-    claimed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, code),
-    CONSTRAINT fk_opx77_claim_account
-        FOREIGN KEY (user_id) REFERENCES opx77_accounts (user_id)
-        ON DELETE CASCADE
-) ENGINE=InnoDB
-      ]],
-    },
-  },
 }

@@ -27,17 +27,21 @@ end
 --- character changed and the autosave carries it. A character at zero stays at zero; the
 --- damage below is what running out costs, not a further drop.
 local function tick()
-  for _, player in pairs(OPX.GetPlayers()) do
+  -- an array, so ipairs says what it is
+  for _, player in ipairs(OPX.GetPlayers()) do
     local data = player.PlayerData
     local metadata = data.metadata or {}
     local emptied = {}
 
     for _, need in ipairs(NEEDS) do
       local held = finite(metadata[need])
-      if held ~= nil then
-        local next = math.max(0, held - Config.NEEDS[need].PER_TICK)
-        if next ~= held then player.Functions.SetMetaData(need, next) end
-        if next <= 0 then emptied[#emptied + 1] = need end
+      local rule = Config[need]
+      if held ~= nil and type(rule) == "table" then
+        -- not `next`: that is the global `pairs` is built on, and shadowing it here would
+        -- wait for the first person to reach for it in this scope
+        local left = math.max(0, held - (tonumber(rule.PER_TICK) or 0))
+        if left ~= held then player.Functions.SetMetaData(need, left) end
+        if left <= 0 then emptied[#emptied + 1] = need end
       end
     end
 

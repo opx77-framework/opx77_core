@@ -242,7 +242,8 @@ function Vehicles.StoreAll(citizenId)
   end
 
   local stored = 0
-  for _, plateId in ipairs(plates) do
+  for index = 1, #plates do
+    local plateId = plates[index]
     -- re-read: it may have been stored or removed while we were awaiting an earlier one
     if live[plateId] ~= nil and Vehicles.Store(plateId).ok then stored = stored + 1 end
   end
@@ -290,7 +291,8 @@ CreateThread(function()
     local plates = {}
     for plateId in pairs(live) do plates[#plates + 1] = plateId end
 
-    for _, plateId in ipairs(plates) do
+    for index = 1, #plates do
+      local plateId = plates[index]
       local ok, err = pcall(function()
         local record = live[plateId]
         if record == nil then return end

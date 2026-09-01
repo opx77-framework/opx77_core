@@ -40,8 +40,11 @@ SELECT plate, citizen_id, record, appearance, garage, state, health, body, paint
  ORDER BY created_at
   ]], { citizen = citizenId })
   if not rows.ok then return rows end
+  local fetched = rows.value
   local list = {}
-  for index, row in ipairs(rows.value or {}) do list[index] = toEntity(row) end
+  for index = 1, type(fetched) == "table" and #fetched or 0 do
+    list[index] = toEntity(fetched[index])
+  end
   return Result.ok(list)
 end
 

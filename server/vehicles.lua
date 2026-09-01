@@ -152,7 +152,7 @@ function Vehicles.Spawn(source, plateId)
   if vehicle.citizenId ~= data.citizenId then
     OPX.Logger.security("vehicle.notYours",
       ("%s asked for %s"):format(data.citizenId, plateId),
-      { owner = vehicle.citizenId })
+      { owner = vehicle.citizenId }, source)
     -- the same code a missing plate gets: "somebody else's" is an existence oracle
     return Result.err("vehicle.notFound", plateId)
   end
@@ -171,6 +171,24 @@ function Vehicles.Spawn(source, plateId)
     secondaryColor = vehicle.paint and vehicle.paint.secondary or nil,
   })
   if id == nil then return Result.err("vehicle.spawnRefused", tostring(reason)) end
+
+  -- Given BACK. Without this the row's damage is write-only and a store-then-spawn cycle is a
+  -- free repair of glass, lights, tyres, dents and the destroyed flag -- the one thing the
+  -- platform deliberately refuses a client.
+  if type(vehicle.damage) == "table" then
+    Open77.vehicles.setDamage(id, vehicle.damage)
+  end
+  local flags = tonumber(vehicle.metadata and vehicle.metadata.flags)
+  if flags ~= nil then Open77.vehicles.update(id, { flags = flags }) end
+
+  -- re-read the connection: `Store.fetchOne` above yielded, and the player may have switched
+  -- character or left in that window. Writing `live` for a character that is gone strands a
+  -- vehicle nothing will ever store, because the departure sweep has already run.
+  local still = character(source)
+  if not still or still.citizenId ~= data.citizenId then
+    Open77.vehicles.remove(id)
+    return Result.err("error.notLoggedIn", tostring(source))
+  end
 
   live[plateId] = { id = id, citizenId = data.citizenId, bucket = position.bucket,
                     atMs = nowMs() }
@@ -194,7 +212,9 @@ function Vehicles.Store(plateId, garage)
     if fetched.ok then
       local vehicle = fetched.value
       vehicle.health = finite(snapshot.health) or vehicle.health
-      vehicle.body = snapshot.bodyDamage
+      vehicle.damage = Open77.vehicles.getDamage(record.id)
+      vehicle.metadata = vehicle.metadata or {}
+      vehicle.metadata.flags = tonumber(snapshot.flags) or nil
       vehicle.state = Store.STATE.STORED
       if garage ~= nil then vehicle.garage = garage end
       Store.save(vehicle)
@@ -212,11 +232,19 @@ end
 ---@param citizenId string
 ---@return integer stored
 function Vehicles.StoreAll(citizenId)
-  local stored = 0
+  -- The plates are collected BEFORE anything yields. `Vehicles.Store` awaits the database
+  -- twice, and a spawn landing during either one inserts a key into the table being walked --
+  -- which is Lua's undefined case for `next`: the rehash silently skips entries, and a car
+  -- that is skipped here is left in the street with nobody connected.
+  local plates = {}
   for plateId, record in pairs(live) do
-    if citizenId == nil or record.citizenId == citizenId then
-      if Vehicles.Store(plateId).ok then stored = stored + 1 end
-    end
+    if citizenId == nil or record.citizenId == citizenId then plates[#plates + 1] = plateId end
+  end
+
+  local stored = 0
+  for _, plateId in ipairs(plates) do
+    -- re-read: it may have been stored or removed while we were awaiting an earlier one
+    if live[plateId] ~= nil and Vehicles.Store(plateId).ok then stored = stored + 1 end
   end
   return stored
 end
@@ -256,17 +284,28 @@ end)
 CreateThread(function()
   while true do
     Wait(Config.SAVE_SECONDS * 1000)
-    for plateId, record in pairs(live) do
-      local snapshot = Open77.vehicles.get(record.id)
-      if snapshot ~= nil then
+    -- snapshot the keys first, for the reason StoreAll does; and wrapped, because this is a
+    -- bare `while true` with no restart -- one raise ends condition persistence for the whole
+    -- process, silently, and the only writes left would be put-away and logout
+    local plates = {}
+    for plateId in pairs(live) do plates[#plates + 1] = plateId end
+
+    for _, plateId in ipairs(plates) do
+      local ok, err = pcall(function()
+        local record = live[plateId]
+        if record == nil then return end
+        local snapshot = Open77.vehicles.get(record.id)
+        if snapshot == nil then return end
         local fetched = Store.fetchOne(plateId)
-        if fetched.ok then
-          local vehicle = fetched.value
-          vehicle.health = finite(snapshot.health) or vehicle.health
-          vehicle.body = snapshot.bodyDamage
-          Store.save(vehicle)
-        end
-      end
+        if not fetched.ok then return end
+        local vehicle = fetched.value
+        vehicle.health = finite(snapshot.health) or vehicle.health
+        vehicle.damage = Open77.vehicles.getDamage(record.id)
+        vehicle.metadata = vehicle.metadata or {}
+        vehicle.metadata.flags = tonumber(snapshot.flags) or nil
+        Store.save(vehicle)
+      end)
+      if not ok then log.error(("saving %s: %s"):format(plateId, tostring(err))) end
     end
   end
 end)
@@ -274,6 +313,9 @@ end)
 --- A resource stop removes every vehicle it owns, so the rows are written first.
 AddEventHandler("onResourceStop", function(name)
   if name ~= GetCurrentResourceName() then return end
+  -- Not dispatched to a thread: a stop does not resume one. Every database call here yields,
+  -- so whether the rows land depends on how far the host lets this handler run -- which is
+  -- why the periodic save above exists and is the guarantee, not this.
   local stored = Vehicles.StoreAll(nil)
   if stored > 0 then log.info(("stored %d vehicle(s) on stop"):format(stored)) end
 end)

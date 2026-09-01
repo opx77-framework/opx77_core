@@ -125,8 +125,11 @@ end
 ---@param event string
 ---@param message? string
 ---@param data? table
-function Logger.security(event, message, data)
-  Logger.log({ event = event, severity = "warn", message = message, data = data })
+---@param source? Source  who caused it: without one the dedupe key is global per event, and
+---                        one player looping a refusal swallows every other player's
+function Logger.security(event, message, data, source)
+  Logger.log({ event = event, severity = "warn", message = message, data = data,
+               source = source })
 end
 
 OPX.Logger = Logger

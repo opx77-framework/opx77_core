@@ -8,13 +8,19 @@ local Events = OPX.Events
 RegisterNetEvent(Events.Client.CHARACTERS, function(payload)
   if type(payload) ~= "table" then return end
 
-  -- fields, never the table: every export holds a reference to OPX.Characters
-  OPX.Characters.list = payload.characters or {}
-  OPX.Characters.slots = payload.slots or 0
-  OPX.Characters.origins = payload.origins or {}
+  -- Typed before they are stored, and before the log line. `#` on a non-table and `%d` on a
+  -- non-integer both raise, and the raise landed BETWEEN the state write and the broadcast --
+  -- leaving a half-applied roster no listener was ever told about.
+  local list = type(payload.characters) == "table" and payload.characters or {}
+  local slots = math.floor(tonumber(payload.slots) or 0)
+  if slots < 0 then slots = 0 end
 
-  log.info(("%d character(s) available, %d slot(s)")
-    :format(#OPX.Characters.list, OPX.Characters.slots))
+  -- fields, never the table: every export holds a reference to OPX.Characters
+  OPX.Characters.list = list
+  OPX.Characters.slots = slots
+  OPX.Characters.origins = type(payload.origins) == "table" and payload.origins or {}
+
+  log.info(("%d character(s) available, %d slot(s)"):format(#list, slots))
   TriggerEvent("opx77:client:charactersReady", OPX.Characters)
 end)
 

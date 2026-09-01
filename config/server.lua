@@ -15,6 +15,15 @@ OPX.Config.SERVER = {
     PAYCHECK_REQUIRES_DUTY = true, -- only pay a player who is on duty
   },
 
+  --- Hunger and thirst. opx77_hud draws them; opx77_status owns the effect strip and not
+  --- these, because these are character metadata and only this VM holds it.
+  NEEDS = {
+    TICK_SECONDS = 300, -- how often they fall
+    DAMAGE_AT_ZERO = 2, -- health lost per tick per empty need; 0 to make them cosmetic
+    hunger = { PER_TICK = 1.0 },
+    thirst = { PER_TICK = 1.4 }, -- thirst outruns hunger, as in every survival system
+  },
+
   --- An easter egg: `/dop` pays once per ACCOUNT, ever. Set REWARD to 0 to turn it off.
   EASTER_EGG = {
     COMMAND = "dop", -- the command name, or false to register none

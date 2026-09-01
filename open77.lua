@@ -49,6 +49,7 @@ server_script "server/player.lua"
 server_script "server/groups.lua" -- after player.lua: a group change writes through the Player
 server_script "server/character.lua"
 server_script "server/lifecycle.lua" -- after character.lua: the gate releases by loading one
+server_script "server/needs.lua" -- after player.lua: it writes through SetMetaData
 server_script "server/vehicles.lua" -- after character.lua: ownership reads PlayerData
 server_script "server/events.lua"
 server_script "server/commands.lua"

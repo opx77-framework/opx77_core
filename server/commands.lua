@@ -178,6 +178,11 @@ RegisterCommand("opx77.delete", function(source, args, raw)
 end, false)
 
 RegisterCommand("opx77.duty", function(source, _, raw)
+  local src = tonumber(source) or 0
+  -- unrestricted, and each run costs two full-PlayerData outbound events
+  if src > 0 and OPX.Cooling(src, "duty", 2000) then
+    return OPX.NotifyLocale(src, "error.tooFast", nil, "error")
+  end
   local player = requirePlayer(source, raw)
   if not player then return end
   CreateThread(function()

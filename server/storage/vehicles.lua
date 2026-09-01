@@ -21,7 +21,10 @@ local function toEntity(row)
     garage = row.garage,
     state = tonumber(row.state) or Vehicles.STATE.STORED,
     health = tonumber(row.health) or 1.0,
-    body = row.body and json.decode(row.body) or nil,
+    -- the column is named `body` for history; it carries the whole damage view --
+    -- body, glass, lights, tires, detachedParts -- because storing only the grid
+    -- made a store-and-respawn cycle a free repair of everything else
+    damage = row.body and json.decode(row.body) or nil,
     paint = row.paint and json.decode(row.paint) or nil,
     metadata = row.metadata and json.decode(row.metadata) or {},
   }
@@ -74,7 +77,7 @@ VALUES (@plate, @citizen, @record, @appearance, @garage, @state, @health, @body,
     garage = entity.garage,
     state = entity.state,
     health = entity.health,
-    body = entity.body and json.encode(entity.body) or nil,
+    body = entity.damage and json.encode(entity.damage) or nil,
     paint = entity.paint and json.encode(entity.paint) or nil,
     metadata = json.encode(entity.metadata or {}),
   })
@@ -94,7 +97,7 @@ UPDATE opx77_vehicles
     garage = entity.garage,
     state = entity.state,
     health = entity.health,
-    body = entity.body and json.encode(entity.body) or nil,
+    body = entity.damage and json.encode(entity.damage) or nil,
     paint = entity.paint and json.encode(entity.paint) or nil,
     metadata = json.encode(entity.metadata or {}),
   })

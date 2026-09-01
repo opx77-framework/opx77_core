@@ -92,8 +92,12 @@ RegisterNetEvent(Events.Server.SELECT_CHARACTER, function(payload)
   CreateThread(function()
     local selected = OPX.SelectCharacter(src, citizenId)
     if not selected.ok then
-      log.warn(("%d could not select %s: %s"):format(src, OPX.Logger.safe(citizenId),
-        tostring(selected.error)))
+      -- not on the cooldown's own refusal: that branch is the one an attacker takes, so
+      -- logging it turns the limit into a line-per-message writer
+      if selected.error ~= "error.tooFast" then
+        log.warn(("%d could not select %s: %s"):format(src, OPX.Logger.safe(citizenId),
+          tostring(selected.error)))
+      end
       OPX.Refuse(src, selected.error)
       OPX.NotifyLocale(src, selected.error, nil, "error")
     end

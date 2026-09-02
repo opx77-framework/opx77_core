@@ -1,12 +1,11 @@
---- String helpers. Lua patterns are byte-oriented and its classes are ASCII-only, so anything
---- here that measures or slices text says which unit it works in.
+--- String helpers. Lua patterns are byte-oriented, so anything here that measures or slices
+--- text says which unit it works in.
 
 local String = {}
 
 local utf8lib = rawget(_G, "utf8")
 
---- Length in characters, or nil when the bytes are not valid UTF-8. The nil is the useful
---- half: a client can put arbitrary bytes on the wire.
+--- Length in characters, or nil when the bytes are not valid UTF-8.
 ---@param text string
 ---@return integer?
 function String.length(text)
@@ -17,9 +16,8 @@ end
 ---@param text string
 ---@return string
 function String.trim(text)
-  -- Not `^%s*(.-)%s*$`: `.-` backtracks once per trailing position, which is
-  -- quadratic on a long internal run of spaces. 48 KiB of them -- one envelope,
-  -- one packet -- is ten seconds of uninterruptible C-level matching.
+  -- not `^%s*(.-)%s*$`: that backtracks once per trailing position, which is quadratic on a
+  -- long run of spaces and uninterruptible at C level
   local from = text:match("^%s*()")
   if from > #text then return "" end
   return text:match(".*%S", from)
@@ -40,9 +38,10 @@ end
 local RANDOM_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 local RANDOM_DIGITS = "0123456789"
 
---- Builds a string from a template: `A` a letter, `1` a digit, `.` either, anything else
---- copied through. Not for anything a player must not guess -- `math.random` is not secure.
----@param template string e.g. "AA-1111" -> "KP-8302"
+--- Builds a string from a template. Not for anything a player must not guess: `math.random`
+--- is not secure.
+---@param template string `A` a letter, `1` a digit, `.` either, anything else copied
+---        through: "AA-1111" -> "KP-8302"
 ---@return string
 function String.random(template)
   local out = {}

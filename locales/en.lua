@@ -9,6 +9,9 @@ OPX.Locale.register("en", {
   ["character.deleted"]      = "Character deleted.",
   ["character.inUse"]        = "That character is already in the world.",
 
+  ["appearance.invalid"]     = "That appearance could not be read.",
+  ["appearance.tooLarge"]    = "That appearance is too large to store.",
+
   ["vehicle.notFound"]       = "No vehicle carries that plate.",
   ["vehicle.limit"]          = "This character owns as many vehicles as it may.",
   ["vehicle.spawned"]        = "Vehicle {plate} brought out.",
@@ -46,6 +49,19 @@ OPX.Locale.register("en", {
   ["gang.notFound"]          = "No such gang.",
   ["gang.gradeNotFound"]     = "That gang has no such grade.",
   ["gang.notMember"]         = "You are not in that gang.",
+
+  ["command.inGameOnly"]     = "That command has to be run in game.",
+  ["command.usage.select"]   = "usage: /opx77.select <citizenId>",
+  ["command.usage.create"]   = "usage: /opx77.create <firstName> <lastName> " ..
+                               "[nomad|streetkid|corpo] [female|male]",
+  ["command.usage.delete"]   = "usage: /opx77.delete <citizenId>",
+  ["command.entered"]        = "You are in the world as {citizenId}.",
+  ["command.characterCount"] = "{count} character(s):",
+  ["command.help.characters"] = "List your characters.",
+  ["command.help.select"]    = "Enter the world as one of your characters.",
+  ["command.help.create"]    = "Create a character.",
+  ["command.help.delete"]    = "Delete one of your characters.",
+  ["command.help.duty"]      = "Clock in or out of your job.",
 
   ["error.unavailable"]      = "That is unavailable right now.",
   ["error.badRequest"]       = "That request was not understood.",

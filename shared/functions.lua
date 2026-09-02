@@ -1,4 +1,4 @@
---- Shared helpers: both runtimes, no platform API beyond what OPX.Log wraps.
+--- Shared helpers: both runtimes, no platform API.
 
 local Result = OPX.Result
 
@@ -15,7 +15,7 @@ function OPX.GetGang(name)
 end
 
 --- Resolves a job and grade into the shape carried on `PlayerData.job`. A Result rather than
---- nil, so the caller can tell "no such job" from "no such grade in that job".
+--- nil, so a caller can tell "no such job" from "no such grade in that job".
 ---@param name string
 ---@param grade integer|string|nil
 ---@return Result  ok value is a PlayerJob
@@ -68,10 +68,8 @@ function OPX.TopGrade(grades)
   return top
 end
 
---- A byte range rather than `%a`, which is ASCII-only and would refuse "Éloïse". \194-\239
---- plus the \128-\191 continuations covers accented Latin, Greek, Cyrillic and CJK; the
---- four-byte lead bytes are left out because that is where emoji live. A literal space, not
---- `%s`, which also matches newline and tab.
+--- A byte range rather than `%a`, which is ASCII-only and would refuse "Éloïse". Four-byte
+--- lead bytes are left out because that is where emoji live.
 local LETTER = "%a\194-\239\128-\191"
 
 OPX.NAME_PATTERN = ("^[%s][%s '%%-]*$"):format(LETTER, LETTER)
@@ -88,26 +86,22 @@ function OPX.ValidateName(value)
   })
 end
 
---- True when `moneyType` is one this server actually has, resolved against config so an
---- operator who adds a type gets it accepted everywhere.
+--- True when `moneyType` is one this server actually has.
 ---@param moneyType any
 ---@return boolean
 function OPX.IsMoneyType(moneyType)
   return OPX.Config.SHARED.MONEY.TYPES[moneyType] ~= nil
 end
 
---- The positions open77_notifications documents. A set rather than a list because the only
---- thing anyone asks is whether a value is in it.
+--- The positions open77_notifications documents.
 OPX.NOTIFY_POSITIONS = {
   middle_left = true,
   top_left = true, top_center = true, top_right = true,
   bottom_left = true, bottom_center = true, bottom_right = true,
 }
 
---- True when `position` is one of the documented notification positions. Advisory only: the
---- server binary forwards `position` to open77_notifications without validating it, and that
---- resource is not on disk, so a caller warns on false rather than dropping the toast. A
---- whitelist that guessed the set wrong would swallow every notification silently.
+--- True when `position` is one of the documented notification positions. Advisory only: a
+--- caller warns on false rather than dropping the toast.
 ---@param position any
 ---@return boolean
 function OPX.IsNotifyPosition(position)
@@ -128,14 +122,8 @@ end
 
 local gameTimer
 
---- Process-monotonic milliseconds. `Open77.time.monotonic()` is the same clock in SECONDS
---- -- the API reference and the host's own Lua bootstrap agree on that, the bootstrap
---- defining `monotonic` as the millisecond scheduler clock divided by 1000.
----
---- `GetGameTimer` is installed by the bootstrap in every server VM, so the fallback below is
---- not expected to run. It still multiplies `monotonic` back up rather than returning a
---- constant: a zero here would make every cooldown in the framework compare two equal
---- numbers for ever, which reads as "the cooldown never elapses" and is invisible.
+--- Process-monotonic milliseconds. The fallback scales `Open77.time.monotonic()` back up: a
+--- constant here would make every cooldown compare two equal numbers forever.
 ---@return integer
 function OPX.Now()
   -- resolved on first use, not at load: during boot the global may not be installed yet

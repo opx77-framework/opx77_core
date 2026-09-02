@@ -1,15 +1,13 @@
---- Schema migrations, append-only: the runner keys on the name, so an edited statement never
---- runs again on a database that has it. `user_id` is ascii_bin because a case-insensitive
---- collation would make two Master-issued GUIDs compare equal; `citizen_id` is the primary
---- key because it is also the `character_key`. No comment inside any SQL string.
+--- Schema migrations, keyed by name and never by position. Every statement here is the one in
+--- the matching `sql/` file and the two are edited together -- see README, "The schema".
 
 OPX.Schema = {
   {
-    name = "0001_accounts",
+    name = "0001_users",
+    file = "sql/users.sql",
     statements = {
-      -- no password and no email: the platform proved who this is before the session existed
       [[
-CREATE TABLE IF NOT EXISTS opx77_accounts (
+CREATE TABLE IF NOT EXISTS opx77_users (
     user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
     display_name VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -20,12 +18,11 @@ CREATE TABLE IF NOT EXISTS opx77_accounts (
   },
 
   {
-    name = "0002_players",
+    name = "0002_characters",
+    file = "sql/characters.sql",
     statements = {
-      -- the JSON columns are never queried by their contents; `cid` is a slot number, not an
-      -- identity, so deleting character 2 of 3 leaves the third as cid 3
       [[
-CREATE TABLE IF NOT EXISTS opx77_players (
+CREATE TABLE IF NOT EXISTS opx77_characters (
     citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
     user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     cid TINYINT UNSIGNED NOT NULL DEFAULT 1,
@@ -36,13 +33,14 @@ CREATE TABLE IF NOT EXISTS opx77_players (
     gang JSON NOT NULL,
     position JSON NULL DEFAULT NULL,
     metadata JSON NOT NULL,
+    appearance JSON NULL DEFAULT NULL,
     last_logged_out TIMESTAMP NULL DEFAULT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     deleted_at TIMESTAMP NULL DEFAULT NULL,
-    KEY idx_opx77_players_user (user_id, deleted_at),
-    CONSTRAINT fk_opx77_player_account
-        FOREIGN KEY (user_id) REFERENCES opx77_accounts (user_id)
+    KEY idx_opx77_characters_user (user_id, deleted_at),
+    CONSTRAINT fk_opx77_character_user
+        FOREIGN KEY (user_id) REFERENCES opx77_users (user_id)
         ON DELETE CASCADE
 ) ENGINE=InnoDB
       ]],
@@ -50,20 +48,20 @@ CREATE TABLE IF NOT EXISTS opx77_players (
   },
 
   {
-    name = "0003_player_groups",
+    name = "0003_character_groups",
+    file = "sql/character_groups.sql",
     statements = {
-      -- the composite primary key makes rejoining a group a promotion, not a duplicate row
       [[
-CREATE TABLE IF NOT EXISTS opx77_player_groups (
+CREATE TABLE IF NOT EXISTS opx77_character_groups (
     citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     group_type ENUM('job', 'gang') NOT NULL,
     group_name VARCHAR(48) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     grade TINYINT UNSIGNED NOT NULL DEFAULT 0,
     joined_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (citizen_id, group_type, group_name),
-    KEY idx_opx77_groups_lookup (group_type, group_name, grade),
-    CONSTRAINT fk_opx77_group_player
-        FOREIGN KEY (citizen_id) REFERENCES opx77_players (citizen_id)
+    KEY idx_opx77_character_groups_lookup (group_type, group_name, grade),
+    CONSTRAINT fk_opx77_character_group_character
+        FOREIGN KEY (citizen_id) REFERENCES opx77_characters (citizen_id)
         ON DELETE CASCADE
 ) ENGINE=InnoDB
       ]],
@@ -72,9 +70,8 @@ CREATE TABLE IF NOT EXISTS opx77_player_groups (
 
   {
     name = "0004_vehicles",
+    file = "sql/vehicles.sql",
     statements = {
-      -- keyed on the plate, not the runtime id: the Open77 vehicle id is issued at spawn and
-      -- is gone the moment the resource that owns it reloads
       [[
 CREATE TABLE IF NOT EXISTS opx77_vehicles (
     plate VARCHAR(12) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
@@ -90,8 +87,8 @@ CREATE TABLE IF NOT EXISTS opx77_vehicles (
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     KEY idx_opx77_vehicles_owner (citizen_id, state),
-    CONSTRAINT fk_opx77_vehicle_player
-        FOREIGN KEY (citizen_id) REFERENCES opx77_players (citizen_id)
+    CONSTRAINT fk_opx77_vehicle_character
+        FOREIGN KEY (citizen_id) REFERENCES opx77_characters (citizen_id)
         ON DELETE CASCADE
 ) ENGINE=InnoDB
       ]],

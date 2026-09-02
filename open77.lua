@@ -6,7 +6,7 @@ auto_start true
 reload_policy "local" -- a reload is a script reload, not a reconnect: both halves rebuild
 
 -- No dependencies declared: a declared dependency is hard, and this core must install on a
--- bare server. open77_appearance and open77_playerstate are consulted through the host.
+-- bare server.
 
 -- The OPX namespace. shared/main.lua creates it, the files below fill it in.
 -- Order inside this block is dependency order.
@@ -15,7 +15,6 @@ shared_script "shared/result.lua"
 shared_script "shared/table.lua"
 shared_script "shared/string.lua"
 shared_script "shared/math.lua"
-shared_script "shared/log.lua"
 shared_script "shared/validate.lua"
 shared_script "shared/hooks.lua"
 
@@ -48,7 +47,7 @@ server_script "server/player.lua"
 server_script "server/groups.lua" -- after player.lua: a group change writes through the Player
 server_script "server/character.lua"
 server_script "server/lifecycle.lua" -- after character.lua: the gate releases by loading one
-server_script "server/needs.lua" -- after player.lua: it writes through SetMetaData
+server_script "server/appearance.lua" -- after character.lua: it writes a character column
 server_script "server/vehicles.lua" -- after character.lua: ownership reads PlayerData
 server_script "server/events.lua"
 server_script "server/commands.lua"
@@ -68,24 +67,16 @@ permissions {
   -- line and a refusal to log anybody in.
   "database.access",
 
-  -- Acting server-side on a client that is not incarnated crashes that client, and the gate
-  -- can open on a timeout with the player holding no puppet.
-  "players.life.read",
+  "players.life.read", -- acting on a client that is not incarnated crashes it
 
-  -- Placement is kill -> respawn, never a transform write: respawn carries the fade and the
-  -- streaming preload that a teleport skips.
+  -- placement is kill -> respawn, never a transform write: respawn carries the fade and the
+  -- streaming preload that a teleport skips
   "players.life.kill",
   "players.life.respawn",
-
-  -- the recovery for a placement that killed and then could not respawn: without it a failed
-  -- respawn leaves the player dead with nothing in this resource able to undo it
-  "players.life.revive",
+  "players.life.revive", -- the recovery for a kill whose respawn then failed
 
   "players.damage.apply", -- armour is re-applied after respawn; nothing here reads it back
-
-  -- Spawning a character's own car, and writing back what happened to it. The runtime id is
-  -- not durable -- a reload removes every vehicle this resource owns -- so the plate is.
-  "world.vehicles",
+  "world.vehicles", -- spawning a character's own car, and writing back what happened to it
 
   -- Deliberately not requested: world.props, world.elevators, combat.config,
   -- players.damage.read, players.disconnect.

@@ -3,7 +3,7 @@
 
 ---@alias Source integer  a session-scoped, recycled player id
 ---@alias UserId string   the Master-signed durable account id (a GUID)
----@alias CitizenId string  "H7K-M4X3" -- also the open77_appearance character_key
+---@alias CitizenId string  "H7K-M4X3" -- also the character key a satellite addresses
 ---@alias MoneyType string  a key of OPX.Config.SHARED.MONEY.TYPES
 ---@alias GroupType "job"|"gang"
 ---@alias Origin "nomad"|"streetkid"|"corpo"
@@ -14,12 +14,6 @@
 ---@field x number
 ---@field y number
 ---@field z number|nil
-
----@class LogScope
----@field debug fun(...)
----@field info fun(...)
----@field warn fun(...)
----@field error fun(...)
 
 --- Wraps a success. `value` may be nil -- an empty answer is a success.
 ---@class LibOk
@@ -51,6 +45,7 @@
 ---@field gangs table<string, integer>  every gang membership, name -> grade
 ---@field position Position|nil    nil until the character has been somewhere
 ---@field metadata PlayerMetadata
+---@field appearance AppearanceSnapshot|nil  nil until a face has been captured
 ---@field lastLoggedOut string|nil
 ---@field reportedHeading number|nil  the client's hint, never authoritative
 
@@ -59,20 +54,31 @@
 ---@field lastName string
 ---@field birthDate string  "YYYY-MM-DD", flavour rather than a fact
 ---@field origin Origin     the lifepath
----@field gender Gender     the open77_appearance body family
+---@field gender Gender     the body family; the engine's own hash is in the snapshot
 ---@field phone string
 
 --- Free-form: a gameplay file adds its own keys and they survive every save.
 ---@class PlayerMetadata
 ---@field health number      0-100, restored on the respawn transaction
 ---@field armor number       0-100, applied after the respawn settles
----@field stamina number   carried, never read by the core
----@field ram number       carried, never read by the core
----@field thirst number    the one need Night City justifies -- there is no hunger
----@field streetCred number  carried, never read by the core
 ---@field isDead boolean
 ---@field inLastStand boolean
 ---@field [string] any
+
+--- A captured face, `opx77_characters.appearance`. Canonical form only: server/appearance.lua
+--- refuses anything else.
+---@class AppearanceSnapshot
+---@field schemaVersion integer  1
+---@field gameBuild string       must be a key of Config.SHARED.APPEARANCE.GAME_BUILDS
+---@field catalogDigest string   64 lower-case hex characters
+---@field gender string          the engine's body-family hash, "0x" and 16 hex digits
+---@field options AppearanceOption[]  dense, 1 to 256 entries
+
+---@class AppearanceOption
+---@field part "head"|"body"|"arms"
+---@field name string   an option hash, "0x" and 16 lower-case hex digits, never zero
+---@field value integer the chosen index, 0 to 511 and below `choices` when that is non-zero
+---@field choices integer  how many the catalogue offers, 0 to 512
 
 --- x, y and z come from `Open77.players.position`; `heading` is the one client-supplied field.
 ---@class Position
@@ -105,6 +111,8 @@
 ---@field PlayerData PlayerData
 ---@field Functions PlayerFunctions
 ---@field Offline boolean
+---@field Revision integer   bumped by every change, never reset; the autosave's dirty flag
+---@field MaySample boolean  true once OPX.PlaceCharacter has put the body where the row says
 
 ---@class PlayerFunctions
 ---@field UpdatePlayerData fun()
@@ -134,8 +142,8 @@
 ---@field charactersSent boolean
 ---@field released boolean|nil
 
---- The trimmed shape sent to a client for the selection screen. Money, metadata and stored
---- position are deliberately absent.
+--- The trimmed shape sent to a client for the selection screen. Money, metadata, appearance
+--- and stored position are deliberately absent.
 ---@class CharacterSummary
 ---@field citizenId CitizenId
 ---@field cid integer
@@ -169,10 +177,11 @@
 ---@field isBoss boolean|nil
 ---@field bankAuth boolean|nil
 
---- Append-only. Never edit one that has shipped: the runner keys on the name and it has
---- already run on live databases.
+--- One schema migration. Append-only: the runner keys on the name, and an entry that has
+--- shipped has already run on live databases.
 ---@class Migration
 ---@field name string
+---@field file string       the `sql/` file carrying the same statements, for an operator
 ---@field statements string[]
 
 --- Returning false from a hook vetoes the operation; returning nothing allows it. Points the

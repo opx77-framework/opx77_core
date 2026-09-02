@@ -1,12 +1,12 @@
---- Checks for values crossing a trust boundary: net events, command arguments, WebUI
---- payloads. The platform authenticates who sent a message, never what is inside it.
+--- Checks for values crossing a trust boundary. The platform authenticates who sent a
+--- message, never what is inside it.
 
 local Result = OPX.Result
 
 local Validate = {}
 
---- Trims, then enforces length and an optional pattern. Length is in characters, not bytes,
---- and malformed UTF-8 is refused outright rather than measured.
+--- Trims, then enforces length and an optional pattern. Length is in characters, not bytes;
+--- malformed UTF-8 is refused rather than measured.
 ---@param value any
 ---@param opts? { min?: integer, max?: integer, pattern?: string }
 ---@return Result
@@ -16,10 +16,8 @@ function Validate.text(value, opts)
     return Result.err("type", "expected string, got " .. type(value))
   end
 
-  -- Bounded in BYTES before the trim, which is the only work here that scales
-  -- with the input. `max` is in characters and cannot serve: a UTF-8 character
-  -- is up to four bytes, so four times it is the honest ceiling, and 1024 keeps
-  -- a caller that passes no `max` from handing the trim a whole envelope.
+  -- bounded in BYTES before the trim, the only work here that scales with the input: a UTF-8
+  -- character is up to four bytes, and 1024 caps a caller that passed no `max`
   local ceiling = math.min(((opts.max or 255) * 4) + 16, 1024)
   if #value > ceiling then return Result.err("too-long") end
 

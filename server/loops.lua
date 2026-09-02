@@ -1,7 +1,5 @@
 --- The two background jobs: keeping positions fresh, and paying people.
 
-local log = OPX.Log.scope("loops")
-
 -- sampled this often because by the time a disconnect handler runs the session is usually
 -- gone and Open77.players.position answers nil
 local SAMPLE_MS = 1000
@@ -10,13 +8,11 @@ local SAMPLE_MS = 1000
 --- settles, and zero would make every idle character a moving one.
 local MOVED_METRES = 1.0
 
---- citizenId -> the position and revision at the last successful write, so "has this changed"
---- is answered against the database rather than against the previous sample.
+--- citizenId -> the position and revision at the last successful write.
 local lastWritten = {}
 
---- True when the row would come out different. Two questions, because "has not moved" is not
---- "has not changed": position is outside the revision count, since routing a 1 Hz sample
---- through a mutator would mark every player dirty on every tick.
+--- True when the row would come out different. Two questions, because position sits outside
+--- the revision count: a 1 Hz sample routed through a mutator would dirty everyone every tick.
 ---@param player Player
 ---@return boolean
 local function needsWriting(player)
@@ -30,10 +26,10 @@ local function needsWriting(player)
   return OPX.Math.distanceSquared(current, mark.position) >= MOVED_METRES * MOVED_METRES
 end
 
---- `revision` is passed in rather than read here: it must be the number the character was at
---- when the statement was built, not the one it holds when the write comes back.
+--- Records what was written.
 ---@param player Player
----@param revision integer
+---@param revision integer the number the character was at when the statement was built, not
+---        the one it holds when the write comes back
 local function remember(player, revision)
   local position = player.PlayerData.position
   lastWritten[player.PlayerData.citizenId] = {
@@ -62,7 +58,8 @@ local function autosave()
   end
 
   if written > 0 then
-    log.debug(("autosave wrote %d of %d character(s)"):format(written, #players))
+    Open77.log.debug(("[loops] autosave wrote %d of %d character(s)")
+      :format(written, #players))
   end
 end
 
@@ -95,8 +92,7 @@ local function paycheck()
   end
 end
 
---- Forgets the write-tracking for characters nobody is playing: without it `lastWritten`
---- grows by one entry per character ever loaded.
+--- Forgets the write-tracking for characters nobody is playing.
 local function prune()
   for citizenId in pairs(lastWritten) do
     if not OPX.PlayerRegistry.byCitizenId[citizenId] then
@@ -114,12 +110,15 @@ CreateThread(function()
     Wait(SAMPLE_MS)
 
     if not OPX.BootError then
-      -- deliberately `pairs(OPX.Players)` and not `OPX.GetPlayers()`: that walk evicts, and
-      -- an eviction here would put a database write inside a 1 Hz loop. Nothing is lost by
-      -- not evicting, because `OPX.SamplePosition` re-checks that the slot still belongs to
-      -- this character before it reads a coordinate.
-      for _, player in pairs(OPX.Players) do
-        OPX.SamplePosition(player)
+      -- deliberately `pairs(OPX.Players)` and not `OPX.GetPlayers()`: that walk evicts, and an
+      -- eviction here would put a database write inside a 1 Hz loop
+      local sampled, sampleError = pcall(function()
+        for _, player in pairs(OPX.Players) do
+          OPX.SamplePosition(player)
+        end
+      end)
+      if not sampled then
+        Open77.log.error("[loops] position sampling raised: " .. tostring(sampleError))
       end
 
       local now = OPX.Now()
@@ -128,14 +127,14 @@ CreateThread(function()
         -- re-read every interval: a live tunable captured in a local freezes at load
         nextSaveAt = now + OPX.TuneNumber("AUTOSAVE_SECONDS", 30) * 1000
         local ok, err = pcall(autosave)
-        if not ok then log.error("autosave raised: " .. tostring(err)) end
+        if not ok then Open77.log.error("[loops] autosave raised: " .. tostring(err)) end
       end
 
       local paycheckMinutes = OPX.TuneNumber("PAYCHECK_MINUTES", 0)
       if paycheckMinutes > 0 and now >= nextPaycheckAt then
         nextPaycheckAt = now + paycheckMinutes * 60000
         local ok, err = pcall(paycheck)
-        if not ok then log.error("paycheck raised: " .. tostring(err)) end
+        if not ok then Open77.log.error("[loops] paycheck raised: " .. tostring(err)) end
       end
 
       if now >= nextPruneAt then
@@ -146,11 +145,8 @@ CreateThread(function()
   end
 end)
 
---- A stop is the last chance to write anything, and it is worth about a tick. One thread per
---- character, not one loop: `OPX.Save` yields inside the await, and a single loop would
---- dispatch the first player's UPDATE, suspend, and never be resumed. What is logged is what
---- was dispatched, not what committed. AUTOSAVE_SECONDS is the number that actually bounds
---- what anybody can lose.
+--- A stop is the last chance to write anything. One thread per character, not one loop: a
+--- single loop would dispatch the first UPDATE, suspend, and never be resumed.
 AddEventHandler("onResourceStop", function(name)
   if name ~= GetCurrentResourceName() then return end
   local players = OPX.GetPlayers()
@@ -160,6 +156,6 @@ AddEventHandler("onResourceStop", function(name)
     CreateThread(function() OPX.Save(player, false) end)
   end
 
-  log.info(("stopping: dispatched a save for %d character(s), best effort")
+  Open77.log.info(("[loops] stopping: dispatched a save for %d character(s), best effort")
     :format(#players))
 end)

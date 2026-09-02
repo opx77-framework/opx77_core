@@ -1,30 +1,27 @@
---- Jobs and gangs, multi-membership, online or offline. Every function here yields when the
---- character is not in the world, so treat the whole file as coroutine only.
+--- Jobs and gangs, multi-membership, online or offline. Coroutine only: every function here
+--- yields when the character is not in the world.
 
 local Result = OPX.Result
-local log = OPX.Log.scope("groups")
 
---- What an offline group change writes back to opx77_players: one column, never the row. Two
---- statements rather than one with the column name interpolated, because a concatenated SQL
---- string is a thing a reader has to re-verify every time.
+--- What an offline group change writes back: one column, never the row. Two statements rather
+--- than one with the column name interpolated.
 local SAVE_PRIMARY = {
   job = [[
-UPDATE opx77_players
+UPDATE opx77_characters
    SET job = @value
  WHERE citizen_id = @citizen
   ]],
   gang = [[
-UPDATE opx77_players
+UPDATE opx77_characters
    SET gang = @value
  WHERE citizen_id = @citizen
   ]],
 }
 
 --- Runs `apply` against a Player, loading a temporary offline one when the character is not
---- in the world, and re-resolving after every await in case a login lands between two of the
---- three round trips.
+--- in the world, and re-resolving after every await in case a login lands mid-change.
 ---@param identifier Player|Source|CitizenId
----@param column "job"|"gang"|nil nil for an operation that only touches opx77_player_groups
+---@param column "job"|"gang"|nil nil for an operation that only touches opx77_character_groups
 ---@param apply fun(player: Player, offline: boolean): Result
 ---@return Result
 local function withCharacter(identifier, column, apply)
@@ -53,8 +50,8 @@ local function withCharacter(identifier, column, apply)
 
   player = OPX.ResolvePlayer(identifier)
   if player then
-    log.debug(("%s came online mid-change; re-applying against the live player")
-      :format(identifier))
+    Open77.log.debug(("[groups] %s came online mid-change; re-applying against the live " ..
+      "player"):format(identifier))
     return apply(player, false)
   end
 
@@ -68,9 +65,8 @@ local function withCharacter(identifier, column, apply)
   return outcome
 end
 
---- The membership write, shared by jobs and gangs. The row goes first, and announcing is the
---- caller's job -- which no caller may skip: `.jobs` is mirrored, and it is also how a
---- membership change on a character who never moves reaches the autosave.
+--- The membership write, shared by jobs and gangs. The row goes first; announcing is the
+--- caller's job and no caller may skip it, because that is what reaches the autosave.
 ---@param player Player
 ---@param groupType GroupType
 ---@param name string
@@ -128,8 +124,7 @@ function OPX.SetJob(identifier, name, grade)
 end
 
 --- Clocks a character in or out of their primary job. Refuses for a job whose `defaultDuty`
---- is true: those have no shift, and clocking out of "unemployed" is a state nothing reasons
---- about.
+--- is true: those have no shift to clock into.
 ---@param identifier Player|Source|CitizenId
 ---@param onDuty boolean
 ---@return Result
@@ -170,8 +165,8 @@ function OPX.AddPlayerToJob(identifier, name, grade)
   end)
 end
 
---- Removes a membership. If it was the primary job the character falls back to the default:
---- leaving them employed by a job they left is how a fired employee keeps drawing a salary.
+--- Removes a membership. If it was the primary job the character falls back to the default,
+--- or a fired employee keeps drawing the salary.
 ---@param identifier Player|Source|CitizenId
 ---@param name string
 ---@return Result
@@ -203,7 +198,7 @@ function OPX.RemovePlayerFromJob(identifier, name)
 end
 
 --- Switches which of a character's existing jobs is primary. Refuses a job they are not a
---- member of rather than joining it: only one of those two requests is a promotion.
+--- member of rather than joining it.
 ---@param identifier Player|Source|CitizenId
 ---@param name string
 ---@return Result
@@ -311,8 +306,7 @@ function OPX.GetGroupMembers(groupType, name)
   return OPX.Storage.Players.membersOf(groupType, name)
 end
 
---- Loaded characters whose primary job is `name`. In-memory, so it does not yield: this is
---- what a dispatch or a radio calls, often.
+--- Loaded characters whose primary job is `name`. In-memory: it does not yield.
 ---@param name string
 ---@param onDutyOnly? boolean
 ---@return Player[]
@@ -344,5 +338,5 @@ function OPX.GetPlayersByGang(name)
   return out
 end
 
-log.debug(("%d job(s) and %d gang(s) defined")
+Open77.log.debug(("[groups] %d job(s) and %d gang(s) defined")
   :format(OPX.Table.count(OPX.Jobs), OPX.Table.count(OPX.Gangs)))

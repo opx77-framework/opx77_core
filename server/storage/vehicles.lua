@@ -21,9 +21,8 @@ local function toEntity(row)
     garage = row.garage,
     state = tonumber(row.state) or Vehicles.STATE.STORED,
     health = tonumber(row.health) or 1.0,
-    -- the column is named `body` for history; it carries the whole damage view --
-    -- body, glass, lights, tires, detachedParts -- because storing only the grid
-    -- made a store-and-respawn cycle a free repair of everything else
+    -- the `body` column carries the whole damage view: body, glass, lights, tires,
+    -- detachedParts
     damage = row.body and json.decode(row.body) or nil,
     paint = row.paint and json.decode(row.paint) or nil,
     metadata = row.metadata and json.decode(row.metadata) or {},
@@ -62,8 +61,7 @@ SELECT plate, citizen_id, record, appearance, garage, state, health, body, paint
   return Result.ok(toEntity(row.value))
 end
 
---- Creates one. The unique key on `plate` decides a collision, not a SELECT beforehand: two
---- callers in the same tick both pass that check and one takes the other's plate.
+--- Creates one. The unique key on `plate` decides a collision, not a SELECT beforehand.
 ---@param entity table
 ---@return table result
 function Vehicles.insert(entity)

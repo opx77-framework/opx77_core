@@ -1,8 +1,5 @@
 --- Citizen IDs, e.g. "H7K-M4X3": 23 unambiguous symbols, six payload and one check. The
---- check is a weighted sum modulo 23, and the modulus being prime is what catches every
---- single-symbol substitution and every neighbour transposition -- do not change the alphabet
---- size or the weights. The grouped form is also the open77_appearance `character_key`, whose
---- validator accepts only `^[%w_.:%-]+$`.
+--- prime modulus is what catches every substitution and transposition -- do not change it.
 
 local Result = OPX.Result
 
@@ -43,8 +40,8 @@ function CitizenId.build(values)
   return grouped(table.concat(symbols))
 end
 
----@param rng? fun(low: integer, high: integer): integer injectable so generation can be
----           made deterministic
+---@param rng? fun(low: integer, high: integer): integer injectable, so generation can be
+---        made deterministic
 ---@return CitizenId
 function CitizenId.generate(rng)
   rng = rng or math.random
@@ -54,7 +51,7 @@ function CitizenId.generate(rng)
 end
 
 --- Parses player input: forgiving about case and separators, strict about content. An unknown
---- symbol is rejected, never dropped -- dropping turns "AO2C-D3F" into somebody else's id.
+--- symbol is rejected, never dropped: dropping turns one id into somebody else's.
 ---@param input any
 ---@return Result
 function CitizenId.parse(input)

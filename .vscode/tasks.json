@@ -8,6 +8,14 @@
       "command": "find . -name '*.lua' -not -name 'open77.lua' -not -path './.git/*' -exec luac5.4 -p {} +",
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
+    },
+    {
+      "label": "OPX//77 : parité sql/ et schema.lua",
+      "detail": "Vérifie que sql/*.sql et server/storage/schema.lua portent les mêmes instructions.",
+      "type": "shell",
+      "command": "python3 tools/check_sql_parity.py",
+      "group": "test",
+      "problemMatcher": []
     }
   ]
 }

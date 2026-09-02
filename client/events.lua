@@ -1,32 +1,14 @@
---- Every server-to-client handler, in the same three steps: update the mirrored state, fire
---- the local event, log. The order matters -- the state is written before the event, so a
---- handler woken by it reads the change rather than the value it replaced.
----
---- This publishes the core's state on TWO channels, and a satellite picks one:
----
----   networked -- `OPX.Events.Client.*`, the `opx77:client:*` names the server sends. A
----     listener holds `network.events` and registers with `RegisterNetEvent`. These are the
----     wire and they do not change.
----   local -- `OPX.Events.Local.*`, fired below with `TriggerEvent`. A listener registers
----     with a plain `AddEventHandler` and needs no permission. The client's local event bus
----     is host-wide, so this reaches any resource, not only this one.
----
---- The two vocabularies are deliberately disjoint. A `TriggerEvent` here would also reach
---- every `RegisterNetEvent` handler of the same name -- the dispatcher matches on the name
---- and ignores the network flag -- so re-emitting a wire name from inside its own handler
---- re-enters that handler. Tick-paced rather than recursive, so it is a silent permanent busy
---- loop rather than a crash. `playerLoaded` and `playerUnloaded` used to do exactly that.
+--- Every server-to-client handler: mirror the state, then fire the local event, so a handler
+--- woken by one reads the change rather than the value it replaced.
 
-local log = OPX.Log.scope("events")
 local Events = OPX.Events
 local Local = Events.Local
 
 RegisterNetEvent(Events.Client.CHARACTERS, function(payload)
   if type(payload) ~= "table" then return end
 
-  -- Typed before they are stored, and before the log line. `#` on a non-table and `%d` on a
-  -- non-integer both raise, and the raise landed BETWEEN the state write and the broadcast --
-  -- leaving a half-applied roster no listener was ever told about.
+  -- typed before they are stored: `#` on a non-table and `%d` on a non-integer both raise,
+  -- and a raise between the state write and the broadcast leaves a half-applied roster
   local list = type(payload.characters) == "table" and payload.characters or {}
   local slots = math.floor(tonumber(payload.slots) or 0)
   if slots < 0 then slots = 0 end
@@ -36,7 +18,7 @@ RegisterNetEvent(Events.Client.CHARACTERS, function(payload)
   OPX.Characters.slots = slots
   OPX.Characters.origins = type(payload.origins) == "table" and payload.origins or {}
 
-  log.info(("%d character(s) available, %d slot(s)"):format(#list, slots))
+  Open77.log.info(("[events] %d character(s) available, %d slot(s)"):format(#list, slots))
   TriggerEvent(Local.CHARACTERS_READY, OPX.Characters)
 end)
 
@@ -45,7 +27,7 @@ RegisterNetEvent(Events.Client.PLAYER_LOADED, function(playerData)
   OPX.PlayerData = playerData
   OPX.IsLoggedIn = true
 
-  log.info(("loaded %s (%s %s)"):format(
+  Open77.log.info(("[events] loaded %s (%s %s)"):format(
     tostring(playerData.citizenId),
     tostring(playerData.charInfo and playerData.charInfo.firstName),
     tostring(playerData.charInfo and playerData.charInfo.lastName)))
@@ -81,10 +63,18 @@ RegisterNetEvent(Events.Client.GANG_UPDATE, function(gang)
   TriggerEvent(Local.GANG_CHANGED, gang)
 end)
 
---- A refusal carrying a code and nothing else. The code is a locale key, so a UI renders it
---- with `locale(code)` and gets the player's language for free.
+--- The core stored a new face for the live character.
+RegisterNetEvent(Events.Client.APPEARANCE_UPDATE, function(snapshot)
+  if type(snapshot) ~= "table" then return end
+  OPX.PlayerData.appearance = snapshot
+  TriggerEvent(Local.APPEARANCE_SAVED, snapshot)
+end)
+
+--- A refusal: which request it answers, and a code. The code is always a locale key, so a UI
+--- renders it with `locale(code)` and gets the player's language for free.
 RegisterNetEvent(Events.Client.NOTIFY, function(payload)
   if type(payload) ~= "table" then return end
-  log.warn(("server refused: %s"):format(tostring(payload.code)))
-  TriggerEvent(Local.REFUSED, payload.code, payload.kind)
+  Open77.log.warn(("[events] server refused %s: %s")
+    :format(tostring(payload.operation), tostring(payload.code)))
+  TriggerEvent(Local.REFUSED, payload.code, payload.kind, payload.operation)
 end)

@@ -1,6 +1,5 @@
---- Every statement the core runs about a character, in one file, so a schema change touches
---- one file and a server owner can read the statements without the rules that call them.
---- Everything here returns a Result and yields: coroutine only.
+--- Every statement the core runs about a character, in one file. Everything here returns a
+--- Result and yields: coroutine only. The schema is in `sql/`.
 
 local Result = OPX.Result
 local Storage = OPX.Storage
@@ -8,8 +7,7 @@ local Storage = OPX.Storage
 local Players = {}
 
 --- Accepts a string or an already-decoded table, because a bridge build may do either. A
---- column that fails to decode is absent rather than fatal: one corrupted character must not
---- stop a server booting.
+--- column that fails to decode is absent rather than fatal.
 local function decode(value, fallback)
   if type(value) == "table" then return value end
   if type(value) ~= "string" or value == "" then return fallback end
@@ -18,19 +16,18 @@ local function decode(value, fallback)
   return decoded
 end
 
---- The inverse, so no call site has to remember that the columns are JSON.
 local function encode(value)
   return json.encode(value or {})
 end
 
---- One statement, so two connections racing cannot both insert. display_name is assigned
---- unconditionally because ON UPDATE CURRENT_TIMESTAMP only fires when a column changes.
+--- Records the account behind a session. `display_name` is assigned unconditionally because
+--- ON UPDATE CURRENT_TIMESTAMP only fires when a column changes.
 ---@param userId UserId
 ---@param displayName? string
 ---@return Result
 function Players.upsertAccount(userId, displayName)
   return Storage.execute([[
-INSERT INTO opx77_accounts (user_id, display_name)
+INSERT INTO opx77_users (user_id, display_name)
 VALUES (@user, @name)
 ON DUPLICATE KEY UPDATE
     display_name = VALUES(display_name),
@@ -39,7 +36,7 @@ ON DUPLICATE KEY UPDATE
 end
 
 --- Turns one database row into the shape the rest of the core passes around. Every JSON
---- column gets a default: a row written by an older core is a shape this one must survive.
+--- column gets a default; `appearance` defaults to nil, meaning "never set".
 local function toEntity(row)
   if not row then return nil end
   return {
@@ -53,6 +50,7 @@ local function toEntity(row)
     gang = decode(row.gang, {}),
     position = decode(row.position, nil),
     metadata = decode(row.metadata, {}),
+    appearance = decode(row.appearance, nil),
     lastLoggedOut = row.last_logged_out,
   }
 end
@@ -66,8 +64,8 @@ Players.toEntity = toEntity
 function Players.fetchAll(userId)
   local rows = Storage.query([[
 SELECT citizen_id, user_id, cid, name, char_info, money, job, gang,
-       position, metadata, last_logged_out
-  FROM opx77_players
+       position, metadata, appearance, last_logged_out
+  FROM opx77_characters
  WHERE user_id = @user AND deleted_at IS NULL
  ORDER BY last_logged_out IS NULL DESC, last_logged_out DESC, cid ASC
   ]], { user = userId })
@@ -85,8 +83,8 @@ end
 function Players.fetchOne(citizenId)
   local row = Storage.single([[
 SELECT citizen_id, user_id, cid, name, char_info, money, job, gang,
-       position, metadata, last_logged_out
-  FROM opx77_players
+       position, metadata, appearance, last_logged_out
+  FROM opx77_characters
  WHERE citizen_id = @citizen AND deleted_at IS NULL
  LIMIT 1
   ]], { citizen = citizenId })
@@ -102,7 +100,7 @@ end
 ---@return Result  err character.limit when the account is full
 function Players.nextCid(userId, slots)
   local rows = Storage.query([[
-SELECT cid FROM opx77_players
+SELECT cid FROM opx77_characters
  WHERE user_id = @user AND deleted_at IS NULL
   ]], { user = userId })
   if not rows.ok then return rows end
@@ -123,7 +121,7 @@ end
 ---@return Result
 function Players.insert(entity)
   return Storage.execute([[
-INSERT INTO opx77_players
+INSERT INTO opx77_characters
     (citizen_id, user_id, cid, name, char_info, money, job, gang, position, metadata)
 VALUES
     (@citizen, @user, @cid, @name, @charInfo, @money, @job, @gang, @position, @metadata)
@@ -148,7 +146,7 @@ end
 ---@return Result
 function Players.save(entity, loggedOut)
   return Storage.execute([[
-UPDATE opx77_players
+UPDATE opx77_characters
    SET name = @name,
        char_info = @charInfo,
        money = @money,
@@ -156,6 +154,7 @@ UPDATE opx77_players
        gang = @gang,
        position = @position,
        metadata = @metadata,
+       appearance = @appearance,
        last_logged_out = CASE WHEN @loggedOut = 1 THEN CURRENT_TIMESTAMP ELSE last_logged_out END
  WHERE citizen_id = @citizen
   ]], {
@@ -167,18 +166,34 @@ UPDATE opx77_players
     gang = encode(entity.gang),
     position = entity.position and encode(entity.position) or nil,
     metadata = encode(entity.metadata),
+    appearance = entity.appearance and encode(entity.appearance) or nil,
     loggedOut = loggedOut and 1 or 0,
   })
 end
 
---- How many rows this account has ever owned, soft-deleted ones included -- the one read in
---- the core that does not filter `deleted_at`. Create-delete-create writes a new row each
---- time, and this is what bounds it.
+--- The one column, written the moment a face is committed rather than at the next autosave.
+--- `nil` clears it, which is what "this character has no stored face" means.
+---@param citizenId CitizenId
+---@param appearance table|nil a canonical snapshot, already validated
+---@return Result
+function Players.saveAppearance(citizenId, appearance)
+  return Storage.execute([[
+UPDATE opx77_characters
+   SET appearance = @appearance
+ WHERE citizen_id = @citizen AND deleted_at IS NULL
+  ]], {
+    citizen = citizenId,
+    appearance = appearance and json.encode(appearance) or nil,
+  })
+end
+
+--- How many rows this account has ever owned, soft-deleted ones included: the one read in the
+--- core that does not filter `deleted_at`, and what bounds create-delete-create.
 ---@param userId UserId
 ---@return Result  ok value is the count
 function Players.countRows(userId)
   local row = Storage.single([[
-SELECT COUNT(*) AS total FROM opx77_players WHERE user_id = @user
+SELECT COUNT(*) AS total FROM opx77_characters WHERE user_id = @user
   ]], { user = userId })
   if not row.ok then return row end
   return Result.ok(tonumber(row.value and row.value.total) or 0)
@@ -190,19 +205,18 @@ end
 ---@return Result
 function Players.softDelete(citizenId)
   return Storage.execute([[
-UPDATE opx77_players SET deleted_at = CURRENT_TIMESTAMP
+UPDATE opx77_characters SET deleted_at = CURRENT_TIMESTAMP
  WHERE citizen_id = @citizen AND deleted_at IS NULL
   ]], { citizen = citizenId })
 end
 
---- Every job and gang a character belongs to, as two `name -> grade` maps: every caller asks
---- "is this character in X" and never "what is the third one".
+--- Every job and gang a character belongs to, as two `name -> grade` maps.
 ---@param citizenId CitizenId
 ---@return Result  ok value is { jobs = table, gangs = table }
 function Players.fetchGroups(citizenId)
   local rows = Storage.query([[
 SELECT group_type, group_name, grade
-  FROM opx77_player_groups
+  FROM opx77_character_groups
  WHERE citizen_id = @citizen
   ]], { citizen = citizenId })
   if not rows.ok then return rows end
@@ -220,8 +234,8 @@ SELECT group_type, group_name, grade
   return Result.ok({ jobs = jobs, gangs = gangs })
 end
 
---- Joining a group you are already in is a promotion, not a duplicate row -- enforced by the
---- composite primary key rather than by whichever call site remembered to check.
+--- Joins a group, or promotes within one. Which of the two it is falls out of the composite
+--- primary key rather than out of whichever call site remembered to check.
 ---@param citizenId CitizenId
 ---@param groupType GroupType
 ---@param groupName string
@@ -229,7 +243,7 @@ end
 ---@return Result
 function Players.upsertGroup(citizenId, groupType, groupName, grade)
   return Storage.execute([[
-INSERT INTO opx77_player_groups (citizen_id, group_type, group_name, grade)
+INSERT INTO opx77_character_groups (citizen_id, group_type, group_name, grade)
 VALUES (@citizen, @type, @name, @grade)
 ON DUPLICATE KEY UPDATE grade = VALUES(grade)
   ]], { citizen = citizenId, type = groupType, name = groupName, grade = grade })
@@ -241,23 +255,23 @@ end
 ---@return Result
 function Players.removeGroup(citizenId, groupType, groupName)
   return Storage.execute([[
-DELETE FROM opx77_player_groups
+DELETE FROM opx77_character_groups
  WHERE citizen_id = @citizen AND group_type = @type AND group_name = @name
   ]], { citizen = citizenId, type = groupType, name = groupName })
 end
 
---- Everyone in a group, online or not, for a boss menu or the `opx77.group` diagnostic.
---- Bounded at 200: an unbounded result set is a stall on the database worker.
+--- Everyone in a group, online or not. Bounded at 200: an unbounded result set is a stall on
+--- the database worker.
 ---@param groupType GroupType
 ---@param groupName string
----@return Result
+---@return Result  ok value is a list of { citizenId, grade, name }
 function Players.membersOf(groupType, groupName)
   local rows = Storage.query([[
-SELECT g.citizen_id, g.grade, p.name, p.char_info
-  FROM opx77_player_groups g
-  JOIN opx77_players p ON p.citizen_id = g.citizen_id
- WHERE g.group_type = @type AND g.group_name = @name AND p.deleted_at IS NULL
- ORDER BY g.grade DESC, p.name ASC
+SELECT g.citizen_id, g.grade, c.name, c.char_info
+  FROM opx77_character_groups g
+  JOIN opx77_characters c ON c.citizen_id = g.citizen_id
+ WHERE g.group_type = @type AND g.group_name = @name AND c.deleted_at IS NULL
+ ORDER BY g.grade DESC, c.name ASC
  LIMIT 200
   ]], { type = groupType, name = groupName })
   if not rows.ok then return rows end

@@ -1,5 +1,4 @@
---- Success or failure as a value, so `nil` never has to mean both "failed" and "found
---- nothing". A failure still never unwinds the stack.
+--- Success or failure as a value, so `nil` never means both "failed" and "found nothing".
 
 local Result = {}
 

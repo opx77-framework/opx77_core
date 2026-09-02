@@ -1,9 +1,7 @@
 --- Multicharacter: the roster, creation, deletion, selection and placement. Everything here
---- yields -- coroutine only. Appearance belongs to `open77_appearance`, keyed by the same
---- citizen id; the selection interface belongs to a satellite client resource.
+--- yields -- coroutine only.
 
 local Result = OPX.Result
-local log = OPX.Log.scope("character")
 
 local Shared = OPX.Config.SHARED
 local Config = OPX.Config.SERVER
@@ -46,7 +44,7 @@ function OPX.SendCharacters(source)
   if not session then return Result.err("entry.noIdentity", tostring(source)) end
 
   if OPX.BootError then
-    OPX.Refuse(source, "error.unavailable")
+    OPX.Refuse(source, "error.unavailable", OPX.Operations.ROSTER)
     return Result.err("error.unavailable", OPX.BootError)
   end
 
@@ -67,14 +65,14 @@ function OPX.SendCharacters(source)
     origins = OPX.Origins,
   })
 
-  log.info(("%s has %d character(s)"):format(session.displayName, #list))
+  Open77.log.info(("[character] %s has %d character(s)"):format(session.displayName, #list))
   return Result.ok(summaries)
 end
 
---- Everything in `payload` came off the wire. `source` is the only value a client cannot
---- forge, which is why the account is taken from the session and never from the payload.
+--- Checks a registration off the wire. The account is taken from the session and never from
+--- the payload: `source` is the only value a client cannot forge.
 ---@param payload any
----@return Result
+---@return Result  ok value is { firstName, lastName, origin, gender, birthDate }
 local function validateRegistration(payload)
   if type(payload) ~= "table" then
     return Result.err("error.badRequest", "payload is not a table")
@@ -89,7 +87,6 @@ local function validateRegistration(payload)
   local origin = OPX.Validate.oneOf(payload.origin, OPX.Origins)
   if not origin.ok then return Result.err("character.badOrigin", tostring(payload.origin)) end
 
-  -- the body family open77_appearance understands; its CHECK constraint accepts these two
   local gender = OPX.Validate.oneOf(payload.gender, { female = true, male = true })
   if not gender.ok then return Result.err("error.badRequest", "gender") end
 
@@ -107,8 +104,8 @@ local function validateRegistration(payload)
   })
 end
 
---- Creates a character on the caller's own account. The citizen id is drawn, and a collision
---- is settled by the unique key on the column rather than by a SELECT beforehand.
+--- Creates a character on the caller's own account. A citizen id collision is settled by the
+--- unique key on the column rather than by a SELECT beforehand.
 ---@param source Source
 ---@param payload table
 ---@return Result  ok value is a CharacterSummary
@@ -132,7 +129,7 @@ function OPX.CreateCharacter(source, payload)
   -- 5 is the FLOOR argument, not a default: TuneNumber falls back to the config value
   local ceiling = OPX.TuneNumber("CHARACTER_ROWS", 5)
   if rows.value >= ceiling then
-    log.warn(("%s has %d character rows, at the ceiling of %d")
+    Open77.log.warn(("[character] %s has %d character rows, at the ceiling of %d")
       :format(session.userId, rows.value, ceiling))
     return Result.err("character.rowLimit", tostring(ceiling))
   end
@@ -183,27 +180,23 @@ function OPX.CreateCharacter(source, payload)
     if attempt == 5 then
       return Result.err("error.unavailable", "no free citizen id after 5 draws")
     end
-    log.warn("citizen id collision, drawing another")
+    Open77.log.warn("[character] citizen id collision, drawing another")
   end
 
-  -- The default job is a membership like any other, so new and promoted look the same -- and
-  -- the row is not optional: a character carrying `job.name = "unemployed"` with no row in
-  -- opx77_player_groups is one `OPX.SetPlayerPrimaryJob` refuses forever with `job.notMember`,
-  -- because the membership is what it checks. Both results were discarded until now.
+  -- not optional: `OPX.SetPlayerPrimaryJob` checks the membership row, so a character without
+  -- one is refused its own default job forever
   local jobRow = OPX.Storage.Players.upsertGroup(entity.citizenId, "job", entity.job.name, 0)
   local gangRow = OPX.Storage.Players.upsertGroup(entity.citizenId, "gang", entity.gang.name, 0)
   if not jobRow.ok or not gangRow.ok then
     local failed = not jobRow.ok and jobRow or gangRow
-    -- Undone rather than handed back: a half-created character is worse than none, and the
-    -- account can simply create again. A hard DELETE and not the soft one -- this row is
-    -- seconds old and holds nothing, and the foreign key on opx77_player_groups is
-    -- ON DELETE CASCADE, so whichever membership did land goes with it.
+    -- undone rather than handed back: the row is seconds old, holds nothing, and the
+    -- membership foreign key is ON DELETE CASCADE
     local undone = OPX.Storage.execute(
-      "DELETE FROM opx77_players WHERE citizen_id = @citizen",
+      "DELETE FROM opx77_characters WHERE citizen_id = @citizen",
       { citizen = entity.citizenId })
     if not undone.ok then
-      log.error(("%s was inserted, its memberships failed (%s), and the row could not be " ..
-        "removed either (%s): that character can never hold a job and the row has to go by hand")
+      Open77.log.error(("[character] %s was inserted, its memberships failed (%s), and the " ..
+        "row could not be removed either (%s): it has to go by hand")
         :format(entity.citizenId, tostring(failed.detail), tostring(undone.detail)))
     end
     return Result.err("error.unavailable", tostring(failed.detail))
@@ -216,16 +209,14 @@ function OPX.CreateCharacter(source, payload)
     userId = session.userId,
     source = source,
   })
-  log.info(("%s created %s (%s)"):format(
+  Open77.log.info(("[character] %s created %s (%s)"):format(
     session.displayName, entity.citizenId, registration.firstName))
 
   return Result.ok(toSummary(entity))
 end
 
 --- Deletes one of the caller's own characters. Soft: the row is marked rather than removed,
---- so a mistake is recoverable and the citizen id is never reissued. Rows in CASCADE_TABLES
---- are removed for real -- those belong to gameplay files that never agreed to the
---- soft-delete convention.
+--- so the citizen id is never reissued. Rows in `CHARACTERS.CASCADE_TABLES` go for real.
 ---@param source Source
 ---@param citizenId CitizenId
 ---@return Result
@@ -279,23 +270,7 @@ end
 
 --- True once the platform's view of a player has stopped moving. Placing somebody
 --- mid-transition is how a respawn lands on top of another one.
----
---- OPEN QUESTION, deliberately left alone. The platform's own prescribed test for "not yet
---- incarnated" is a NIL snapshot, which this already rejects. What nobody here has been able
---- to establish is what `getLifeState` answers on the SERVER for a client still sitting on the
---- "press any key to continue" screen: if that is a table with phase "dead", then accepting
---- "dead" lets placement kill and respawn a player who is not incarnated, which crashes their
---- client. If it is nil, or "alive", this is already correct and dropping "dead" would only
---- break a legitimately dead player switching characters. No shipped binary or doc settles it.
----
---- One measurement settles it, and it needs no code: put a client on that screen and run the
---- existing `/opx77.where <id>`, which already prints `life : %s` from `getLifeState`.
---- "unreadable" means this function is right as it stands; "dead" or "alive" means the guard
---- is a real hole, and the only sound replacement is a positive incarnation check --
---- `Open77.ready.status(source)` showing no hold whose `resource` is `__platform` -- which
---- cannot be adopted until some resource here emits `open77:session:gameplayReady`, because
---- until then that hold never clears and the check would place nobody at all.
----@param life table|nil
+---@param life table|nil what `Open77.players.getLifeState` answered
 ---@return boolean
 local function isSettled(life)
   return type(life) == "table" and (life.phase == "alive" or life.phase == "dead")
@@ -308,10 +283,8 @@ local function allowSampling(player)
   player.MaySample = true
 end
 
---- Puts a loaded character where they belong: kill -> respawn, never a raw transform, because
---- the respawn transaction carries the fade, the streaming preload and the grace window.
---- Every failing exit leaves `MaySample` false, which is what stops the sampler writing
---- "wherever the engine dropped them" over the position placement failed to restore.
+--- Puts a loaded character where they belong: kill then respawn, never a raw transform. Every
+--- failing exit leaves `MaySample` false.
 ---@param player Player
 ---@return boolean placed, string? reason
 function OPX.PlaceCharacter(player)
@@ -330,9 +303,8 @@ function OPX.PlaceCharacter(player)
     target = { x = spawn.X, y = spawn.Y, z = spawn.Z, heading = spawn.HEADING, bucket = 0 }
   end
 
-  -- five looks over a second: the player may still be settling. The gate has NOT opened -- the
-  -- core is still holding it and only releases in SelectCharacter once this has returned --
-  -- so this poll is the whole of what stands between placement and a player mid-transition.
+  -- five looks over a second: the gate has not opened yet, so this poll is the whole of what
+  -- stands between placement and a player mid-transition
   local life
   for _ = 1, 5 do
     life = Open77.players.getLifeState(source)
@@ -358,15 +330,15 @@ function OPX.PlaceCharacter(player)
     graceMs = 5000,
   })
   if not respawned then
-    -- we killed them and could not put them back. A revive leaves the body where it fell
-    -- rather than where the row says, so MaySample stays false and the stored position
-    -- survives for the next attempt.
+    -- a revive leaves the body where it fell rather than where the row says, so MaySample
+    -- stays false and the stored position survives for the next attempt
     local revived, reviveError = Open77.players.revive(source, {
       health = OPX.Math.clamp(health / 100, 0.15, 1.0),
       graceMs = 5000,
     })
     if not revived then
-      log.error(("%d was killed for placement and neither respawn (%s) nor revive (%s) put them back")
+      Open77.log.error(("[character] %d was killed for placement and neither respawn (%s) " ..
+        "nor revive (%s) put them back")
         :format(source, tostring(respawnError), tostring(reviveError)))
     end
     return false, tostring(respawnError)
@@ -376,14 +348,12 @@ function OPX.PlaceCharacter(player)
   local armor = tonumber(data.metadata.armor) or 0
   if armor > 0 then Open77.players.setArmor(source, armor) end
 
-  -- the world now agrees with the row, so the sampler may take over
   allowSampling(player)
   return true
 end
 
---- The whole "I choose this one" sequence. Order is the contract: log in, place, then release
---- the gate. Releasing first lets every other resource act on a player who is not yet where
---- they belong, which is the race the gate exists to prevent.
+--- The whole "I choose this one" sequence. The order is the contract: log in, place, then
+--- release the gate.
 ---@param source Source
 ---@param citizenId CitizenId
 ---@return Result  ok value is the Player
@@ -402,10 +372,8 @@ function OPX.SelectCharacter(source, citizenId)
     return Result.ok(current)
   end
 
-  -- The target is checked BEFORE the teardown below. Logging the current
-  -- character out and only then discovering the id is not theirs left the player
-  -- in the world with nothing loaded and nothing saving them -- reachable by
-  -- typing `/opx77.select` with any id that is not yours, no modified client.
+  -- the target is checked BEFORE the teardown below, or a refused switch leaves the player in
+  -- the world with nothing loaded and nothing saving them
   if current then
     local wanted = OPX.Storage.Players.fetchOne(parsed.value)
     if not wanted.ok then return wanted end
@@ -414,7 +382,6 @@ function OPX.SelectCharacter(source, citizenId)
       OPX.Logger.security("character.notYours",
         ("player %d asked to switch to %s"):format(source, parsed.value),
         { userId = session and session.userId, owner = wanted.value.userId }, source)
-      -- the same code a missing character gets, for the same reason as in Login
       return Result.err("character.notFound", parsed.value)
     end
     local already = OPX.GetPlayerByCitizenId(parsed.value)
@@ -427,8 +394,7 @@ function OPX.SelectCharacter(source, citizenId)
   if current then
     local saved = OPX.LogoutAndWait(source)
     if saved and saved.ok == false then
-      -- the old row is not written, and loading the next one over it makes that permanent
-      log.error(("refusing the switch: %s could not be saved (%s)")
+      Open77.log.error(("[character] refusing the switch: %s could not be saved (%s)")
         :format(current.PlayerData.citizenId, tostring(saved.error)))
       return Result.err("error.unavailable", tostring(saved.error))
     end
@@ -442,12 +408,8 @@ function OPX.SelectCharacter(source, citizenId)
 
   local placed, reason = OPX.PlaceCharacter(login.value)
   if not placed then
-    log.warn(("%s logged in but was not placed: %s"):format(parsed.value, tostring(reason)))
-    -- said out loud: from every other angle a frozen stored position is invisible
-    if not login.value.MaySample then
-      log.warn("  their stored position is frozen until a placement succeeds, so the")
-      log.warn("  autosave cannot overwrite it with wherever the engine left them.")
-    end
+    Open77.log.warn(("[character] %s logged in but was not placed: %s")
+      :format(parsed.value, tostring(reason)))
   end
 
   OPX.Lifecycle.release(source, placed and "character-placed" or "character-loaded")

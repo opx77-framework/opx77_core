@@ -4,7 +4,7 @@
 OPX.Config.SHARED = {
   SERVER_NAME = "OPX//77", -- shown in the launcher and in player-facing text
 
-  LOCALE = "fr", -- language for player-facing text; server logs stay in English
+  LOCALE = "en", -- language for player-facing text; server logs stay in English
 
   MONEY = {
     -- durable names: they become keys in the `money` JSON column, so adding one is free and

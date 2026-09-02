@@ -144,7 +144,10 @@ CreateThread(function()
     OPX.BootError = "no database"
   end
 
-  warnAboutPlacementConflicts()
+  local warned, warnError = pcall(warnAboutPlacementConflicts)
+  if not warned then
+    Open77.log.error("[core] the placement-conflict check raised: " .. tostring(warnError))
+  end
 
   if not OPX.Config.SHARED.DEFAULT_SPAWN.SET then
     Open77.log.warn("[core] DEFAULT_SPAWN.SET is false in config/shared.lua: characters " ..

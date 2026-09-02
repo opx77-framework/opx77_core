@@ -24,7 +24,10 @@ local function targetOf(argument, fallbackSource)
   if argument == nil then return OPX.GetPlayer(fallbackSource) end
   local asId = tonumber(argument)
   if asId then return OPX.GetPlayer(asId) end
-  return OPX.GetPlayerByCitizenId(tostring(argument):upper())
+  -- the parsed form, never the raw one: a citizen id typed without its separator is still one
+  local parsed = OPX.CitizenId.parse(argument)
+  if not parsed.ok then return nil end
+  return OPX.GetPlayerByCitizenId(parsed.value)
 end
 
 --- The doorway guard for an unrestricted command that answers on its own thread.

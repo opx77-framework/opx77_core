@@ -1,8 +1,12 @@
 # opx77_core
 
 > [!WARNING]
-> **Early development, not production-ready.** The API, schema and internals change without
-> notice. Do not build production resources against them yet.
+> **This project is currently in early development and is not considered production-ready.**
+>
+> The API, architecture, features, and internal systems are subject to change at any time
+> without prior notice. Breaking changes may be introduced as development progresses.
+>
+> **Do not rely on the current API for production resources yet.**
 
 The core resource of **OPX//77** for the Open77 platform. It owns everything durable about a
 character — the schema, every write, and the events that publish the result. A satellite draws
@@ -49,6 +53,25 @@ therefore in every event the core publishes.
 than added as new ones, so a database created earlier keeps the old tables while the code
 queries the new names. Drop it and let the runner recreate it: there is no automatic migration
 path and none is planned.
+
+## Commands
+
+Every command is registered with `RegisterCommand`'s restricted flag, so the host resolves
+`command.<name>` against the caller's ACL **before this resource runs at all**. The four a
+player uses are open and take a cooldown instead.
+
+| Command | Gated |
+|---|---|
+| `opx77.characters` | open — list your own characters |
+| `opx77.select` | open — enter the world as one of them |
+| `opx77.create` | open — create one |
+| `opx77.delete` | open — soft-delete one |
+| `opx77.duty` | open — clock in or out |
+| `opx77` | ACL — who is in the world, and the boot state |
+| `opx77.where` / `opx77.whois` / `opx77.here` | ACL — diagnostics, English only |
+| `opx77.money` / `opx77.job` / `opx77.gang` | ACL — staff edits, audited |
+| `opx77.group` | ACL — the members of a job or gang |
+| `opx77.save` | ACL — write every loaded character back now |
 
 ## Exports
 
@@ -101,7 +124,6 @@ local event bus is host-wide, so it reaches any resource.
 | `opx77:client:jobChanged` / `opx77:client:gangChanged` | a group or grade changed |
 | `opx77:client:appearanceSaved` | the core stored a new face; carries the snapshot |
 | `opx77:client:refused` | the server refused something: `(code, kind, operation)` |
-| `opx77:client:appearanceRequired` / `opx77:client:appearanceChanged` | the platform's appearance service wants a creator run, or switched look |
 
 ### Refusals
 
@@ -167,6 +189,12 @@ and `inLastStand` in it. The gameplay needs — hunger, thirst, stamina, ram, st
 | `config/vehicles.lua` | plate format and spawn ceiling, server-only |
 | `config/client.lua` | client cadences — **never loaded by the server VM** |
 
+Every file lives on `OPX.Config` — `SHARED`, `SERVER`, `VEHICLES`, `CLIENT`. `SHARED.LOCALE`
+sets the language of everything a player reads; server logs stay English.
+`SERVER.MONEY.PAYCHECK_TYPE` names which of `SHARED.MONEY.TYPES` a salary lands in, and the
+paycheck toast names it too; a value that is not a money type falls back to
+`SHARED.MONEY.DEFAULT` with a warning at boot.
+
 Anything an operator may want to change mid-session is a tunable instead, in
 `server/tunables.lua`. Logging level is not configured here: the host owns it, and the core
 calls `Open77.log` directly.
@@ -192,7 +220,16 @@ core disables nothing; it checks `GetResourceState` at boot and prints once what
 - `freeroam` — turn `forceOnJoin` off
 - `pursuit`, `race` — round-based gamemodes; two gamemodes on the same players is a bug
 
+## Locales
+
+`LOCALE` in `config.lua` picks the catalogue player-facing text is read from — `"en"` or `"fr"` as shipped. Each resource carries its own catalogue, so this is set here as well as in `opx77_core`: the core's `Locale` export is client-only and asynchronous, and a resource that renders text at load cannot wait on it.
+
+To add a language, copy `locales/en.lua` to `locales/<code>.lua`, change the code in the `register` call, translate the values, add a `shared_script "locales/<code>.lua"` line to `open77.lua` beside the others, and set `LOCALE` to it. A key missing from a catalogue falls back to English, then to the key itself. `Open77.log` lines and console output stay English whatever the setting.
+
 ## Community & Support
+
+Join the Open77 and Opx77 communities to discover the platform, share your projects, and
+connect with other developers.
 
 <!-- TODO: replace with the final URLs before publication. -->
 

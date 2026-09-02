@@ -121,13 +121,21 @@ function Lifecycle.watch(source)
       if not live or live.userId ~= userId or live.released then return end
       if live.citizenId then return end
 
-      if OPX.Now() >= deadline then
+      -- pcall: a raise here would leave this player holding the gate for the session
+      local ok, timedOut = pcall(function()
+        if OPX.Now() < deadline then return false end
         Open77.log.warn(("[lifecycle] %d spent too long choosing a character; releasing the " ..
           "gate"):format(source))
         OPX.Refuse(source, "entry.timedOut", OPX.Operations.ENTRY)
         Lifecycle.release(source, "selection-timeout")
+        return true
+      end)
+      if not ok then
+        Open77.log.error(("[lifecycle] the selection watch for %d raised: %s")
+          :format(source, tostring(timedOut)))
         return
       end
+      if timedOut then return end
     end
   end)
 end

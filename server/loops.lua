@@ -63,8 +63,16 @@ local function autosave()
   end
 end
 
---- Pays everyone their job's grade payment, into BANK rather than EDDIES: a salary that lands
---- as carried cash can be taken off the body of whoever logged in at the wrong moment.
+--- The money type a salary lands in. Resolved once, so a name that is not a money type is
+--- warned about at boot rather than once per cycle.
+local PAYCHECK_TYPE = OPX.Config.SERVER.MONEY.PAYCHECK_TYPE
+if not OPX.IsMoneyType(PAYCHECK_TYPE) then
+  Open77.log.warn(("[loops] MONEY.PAYCHECK_TYPE %s is not a money type; paying into %s")
+    :format(tostring(PAYCHECK_TYPE), OPX.Config.SHARED.MONEY.DEFAULT))
+  PAYCHECK_TYPE = OPX.Config.SHARED.MONEY.DEFAULT
+end
+
+--- Pays everyone their job's grade payment, into the configured paycheck money type.
 local function paycheck()
   local players = OPX.GetPlayers()
   local requireDuty = OPX.Tune.PAYCHECK_REQUIRES_DUTY
@@ -81,9 +89,9 @@ local function paycheck()
 
     if eligible then
       if OPX.Hooks.trigger("paycheck:before", { player = player, amount = payment }) then
-        if OPX.AddMoney(player, "BANK", payment, "paycheck:" .. job.name) then
+        if OPX.AddMoney(player, PAYCHECK_TYPE, payment, "paycheck:" .. job.name) then
           OPX.NotifyLocale(player.PlayerData.source, "money.paycheck",
-            { amount = payment, job = job.label }, "success")
+            { amount = payment, type = PAYCHECK_TYPE, job = job.label }, "success")
           TriggerEvent(OPX.Events.Internal.PAYCHECK,
             player.PlayerData.source, payment, job.name)
         end
@@ -101,46 +109,57 @@ local function prune()
   end
 end
 
+local nextSaveAt, nextPaycheckAt, nextPruneAt
+
+--- One pass of the background loop. Every job is wrapped on its own, so one failing job does
+--- not skip the others, and the whole pass is wrapped again by its caller.
+local function tick()
+  -- deliberately `pairs(OPX.Players)` and not `OPX.GetPlayers()`: that walk evicts, and an
+  -- eviction here would put a database write inside a 1 Hz loop
+  local sampled, sampleError = pcall(function()
+    for _, player in pairs(OPX.Players) do
+      OPX.SamplePosition(player)
+    end
+  end)
+  if not sampled then
+    Open77.log.error("[loops] position sampling raised: " .. tostring(sampleError))
+  end
+
+  local now = OPX.Now()
+
+  if now >= nextSaveAt then
+    -- re-read every interval: a live tunable captured in a local freezes at load
+    nextSaveAt = now + OPX.TuneNumber("AUTOSAVE_SECONDS", 30) * 1000
+    local ok, err = pcall(autosave)
+    if not ok then Open77.log.error("[loops] autosave raised: " .. tostring(err)) end
+  end
+
+  local paycheckMinutes = OPX.TuneNumber("PAYCHECK_MINUTES", 0)
+  if paycheckMinutes > 0 and now >= nextPaycheckAt then
+    nextPaycheckAt = now + paycheckMinutes * 60000
+    local ok, err = pcall(paycheck)
+    if not ok then Open77.log.error("[loops] paycheck raised: " .. tostring(err)) end
+  end
+
+  if now >= nextPruneAt then
+    nextPruneAt = now + 300000
+    prune()
+  end
+end
+
 CreateThread(function()
-  local nextSaveAt = OPX.Now() + OPX.TuneNumber("AUTOSAVE_SECONDS", 30) * 1000
-  local nextPaycheckAt = OPX.Now() + math.max(OPX.TuneNumber("PAYCHECK_MINUTES", 0), 1) * 60000
-  local nextPruneAt = OPX.Now() + 300000
+  nextSaveAt = OPX.Now() + OPX.TuneNumber("AUTOSAVE_SECONDS", 30) * 1000
+  nextPaycheckAt = OPX.Now() + math.max(OPX.TuneNumber("PAYCHECK_MINUTES", 0), 1) * 60000
+  nextPruneAt = OPX.Now() + 300000
 
   while true do
     Wait(SAMPLE_MS)
 
     if not OPX.BootError then
-      -- deliberately `pairs(OPX.Players)` and not `OPX.GetPlayers()`: that walk evicts, and an
-      -- eviction here would put a database write inside a 1 Hz loop
-      local sampled, sampleError = pcall(function()
-        for _, player in pairs(OPX.Players) do
-          OPX.SamplePosition(player)
-        end
-      end)
-      if not sampled then
-        Open77.log.error("[loops] position sampling raised: " .. tostring(sampleError))
-      end
-
-      local now = OPX.Now()
-
-      if now >= nextSaveAt then
-        -- re-read every interval: a live tunable captured in a local freezes at load
-        nextSaveAt = now + OPX.TuneNumber("AUTOSAVE_SECONDS", 30) * 1000
-        local ok, err = pcall(autosave)
-        if not ok then Open77.log.error("[loops] autosave raised: " .. tostring(err)) end
-      end
-
-      local paycheckMinutes = OPX.TuneNumber("PAYCHECK_MINUTES", 0)
-      if paycheckMinutes > 0 and now >= nextPaycheckAt then
-        nextPaycheckAt = now + paycheckMinutes * 60000
-        local ok, err = pcall(paycheck)
-        if not ok then Open77.log.error("[loops] paycheck raised: " .. tostring(err)) end
-      end
-
-      if now >= nextPruneAt then
-        nextPruneAt = now + 300000
-        prune()
-      end
+      -- the whole pass, not only its jobs: `OPX.Now` and `OPX.TuneNumber` are host reads too,
+      -- and a raise from one of them would end autosaving for the session
+      local ok, err = pcall(tick)
+      if not ok then Open77.log.error("[loops] the background pass raised: " .. tostring(err)) end
     end
   end
 end)

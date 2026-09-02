@@ -11,6 +11,10 @@ OPX.Config.SERVER = {
 
     PAYCHECK_MINUTES = 10, -- minutes between paychecks; zero disables them entirely
     PAYCHECK_REQUIRES_DUTY = true, -- only pay a player who is on duty
+
+    -- which of SHARED.MONEY.TYPES a salary lands in, and the type its toast names; an
+    -- unknown name falls back to SHARED.MONEY.DEFAULT with a warning at boot
+    PAYCHECK_TYPE = "BANK",
   },
 
   CHARACTERS = {

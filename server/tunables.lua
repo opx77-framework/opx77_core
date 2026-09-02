@@ -97,8 +97,9 @@ end
 ---@return number
 function OPX.TuneNumber(key, floor)
   local value = OPX.Tune[key]
-  if type(value) ~= "number" or value ~= value then value = defaults[key] end
-  if type(value) ~= "number" or value ~= value then return floor end
+  -- isFinite, not `value ~= value`: an infinity passes a NaN test and freezes an interval
+  if not OPX.Math.isFinite(value) then value = defaults[key] end
+  if not OPX.Math.isFinite(value) then return floor end
   if floor and value < floor then return floor end
   return value
 end

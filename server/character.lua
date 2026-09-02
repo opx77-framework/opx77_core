@@ -321,7 +321,8 @@ function OPX.PlaceCharacter(player)
   })
   if not killed then return false, tostring(killError) end
 
-  local health = tonumber(data.metadata.health) or 100
+  local health = tonumber(data.metadata.health)
+  if not OPX.Math.isFinite(health) then health = 100 end
   local respawned, respawnError = Open77.players.respawn(source, {
     position = { x = target.x, y = target.y, z = target.z },
     heading = target.heading or 0.0,
@@ -345,8 +346,8 @@ function OPX.PlaceCharacter(player)
   end
 
   -- after the transaction: armour is no respawn option, and the body is about to be replaced
-  local armor = tonumber(data.metadata.armor) or 0
-  if armor > 0 then Open77.players.setArmor(source, armor) end
+  local armor = tonumber(data.metadata.armor)
+  if OPX.Math.isFinite(armor) and armor > 0 then Open77.players.setArmor(source, armor) end
 
   allowSampling(player)
   return true

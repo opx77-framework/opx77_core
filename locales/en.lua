@@ -34,7 +34,7 @@ OPX.Locale.register("en", {
   ["money.negative"]         = "That balance cannot go negative.",
   ["money.vetoed"]           = "That transaction was blocked.",
   ["money.offline"]          = "That character is not in the world.",
-  ["money.paycheck"]         = "You received {amount} eddies for {job}.",
+  ["money.paycheck"]         = "You received {amount} {type} for {job}.",
   ["money.noPaycheckOffDuty"] = "No paycheck: you are off duty.",
 
   ["job.updated"]            = "You are now {grade} at {job}.",

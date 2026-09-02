@@ -1,6 +1,6 @@
 -- Server-only: a plate format and a spawn ceiling are not a client's business.
 
-OPX_VEHICLES = {
+OPX.Config.VEHICLES = {
   PER_CHARACTER = 8, -- the most vehicles one character may own; 0 for no ceiling
   PLATE_FORMAT = "11AAA111", -- 1 becomes a digit, A a letter, anything else stays as written
   DEFAULT_GARAGE = "impound", -- where a vehicle created with no garage belongs

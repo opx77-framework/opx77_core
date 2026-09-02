@@ -13,14 +13,16 @@ Vehicles.STATE = { OUT = 0, STORED = 1, IMPOUNDED = 2 }
 ---@param row table
 ---@return table
 local function toEntity(row)
+  local state = tonumber(row.state)
+  local health = tonumber(row.health)
   return {
     plate = row.plate,
     citizenId = row.citizen_id,
     record = row.record,
     appearance = row.appearance,
     garage = row.garage,
-    state = tonumber(row.state) or Vehicles.STATE.STORED,
-    health = tonumber(row.health) or 1.0,
+    state = OPX.Math.isFinite(state) and state or Vehicles.STATE.STORED,
+    health = OPX.Math.isFinite(health) and health or 1.0,
     -- the `body` column carries the whole damage view: body, glass, lights, tires,
     -- detachedParts
     damage = row.body and json.decode(row.body) or nil,

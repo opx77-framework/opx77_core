@@ -2,7 +2,7 @@
 
 OPX = OPX or {}
 
-OPX.VERSION = "0.2.0"
+OPX.VERSION = "0.3.0"
 
 --- Read off a global only one runtime has -- both are installed by the bootstrap before any
 --- script runs. Not Open77.database: that is only installed with `database.access`.
@@ -62,8 +62,6 @@ OPX.Events = {
     GANG_CHANGED = "opx77:client:gangChanged",
     APPEARANCE_SAVED = "opx77:client:appearanceSaved",
     REFUSED = "opx77:client:refused",
-    APPEARANCE_REQUIRED = "opx77:client:appearanceRequired",
-    APPEARANCE_CHANGED = "opx77:client:appearanceChanged",
   },
 
   --- Resource-local, between core files. These never cross the wire.

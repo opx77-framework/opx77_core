@@ -34,7 +34,7 @@ OPX.Locale.register("fr", {
   ["money.negative"]         = "Ce solde ne peut pas devenir négatif.",
   ["money.vetoed"]           = "Cette transaction a été bloquée.",
   ["money.offline"]          = "Ce personnage n'est pas en jeu.",
-  ["money.paycheck"]         = "Vous avez reçu {amount} eddies pour {job}.",
+  ["money.paycheck"]         = "Vous avez reçu {amount} {type} pour {job}.",
   ["money.noPaycheckOffDuty"] = "Pas de paie : vous n'êtes pas en service.",
 
   ["job.updated"]            = "Vous êtes maintenant {grade} chez {job}.",

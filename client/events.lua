@@ -10,7 +10,8 @@ RegisterNetEvent(Events.Client.CHARACTERS, function(payload)
   -- typed before they are stored: `#` on a non-table and `%d` on a non-integer both raise,
   -- and a raise between the state write and the broadcast leaves a half-applied roster
   local list = type(payload.characters) == "table" and payload.characters or {}
-  local slots = math.floor(tonumber(payload.slots) or 0)
+  local slots = tonumber(payload.slots)
+  slots = OPX.Math.isFinite(slots) and math.floor(slots) or 0
   if slots < 0 then slots = 0 end
 
   -- fields, never the table: every export holds a reference to OPX.Characters

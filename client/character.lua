@@ -47,17 +47,3 @@ end
 function OPX.RequestCharacters()
   TriggerServerEvent(OPX.Events.Server.READY)
 end
-
---- The platform's appearance service has no stored look for the live character and wants the
---- creator run. Re-emitted so a selection UI can step out of the way first.
-RegisterNetEvent("open77:appearance:createRequired", function(nonce, characterKey)
-  Open77.log.info(("[character] appearance wants a creator run for %s")
-    :format(tostring(characterKey)))
-  TriggerEvent(OPX.Events.Local.APPEARANCE_REQUIRED, characterKey, nonce)
-end)
-
---- The platform's appearance service switched which character it is dressing.
-RegisterNetEvent("open77:appearance:characterChanged", function(characterKey)
-  Open77.log.debug(("[character] appearance switched to %s"):format(tostring(characterKey)))
-  TriggerEvent(OPX.Events.Local.APPEARANCE_CHANGED, characterKey)
-end)

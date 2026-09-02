@@ -1,7 +1,7 @@
 --- Vehicles a character owns. The plate is the identity, not the runtime id, and ownership is
 --- proved against the character the connection has loaded rather than any client claim.
 
-local Config = OPX_VEHICLES
+local Config = OPX.Config.VEHICLES
 local Store = OPX.Storage.Vehicles
 local Result = OPX.Result
 
@@ -159,7 +159,7 @@ function Vehicles.Spawn(source, plateId)
   if type(vehicle.damage) == "table" then
     Open77.vehicles.setDamage(id, vehicle.damage)
   end
-  local flags = tonumber(vehicle.metadata and vehicle.metadata.flags)
+  local flags = finiteNumber(vehicle.metadata and vehicle.metadata.flags)
   if flags ~= nil then Open77.vehicles.update(id, { flags = flags }) end
 
   -- re-read the connection: the fetch above yielded, and writing `live` for a character who
@@ -193,7 +193,7 @@ function Vehicles.Store(plateId, garage)
       vehicle.health = finiteNumber(snapshot.health) or vehicle.health
       vehicle.damage = Open77.vehicles.getDamage(record.id)
       vehicle.metadata = vehicle.metadata or {}
-      vehicle.metadata.flags = tonumber(snapshot.flags) or nil
+      vehicle.metadata.flags = finiteNumber(snapshot.flags)
       vehicle.state = Store.STATE.STORED
       if garage ~= nil then vehicle.garage = garage end
       Store.save(vehicle)
@@ -278,7 +278,7 @@ CreateThread(function()
         vehicle.health = finiteNumber(snapshot.health) or vehicle.health
         vehicle.damage = Open77.vehicles.getDamage(record.id)
         vehicle.metadata = vehicle.metadata or {}
-        vehicle.metadata.flags = tonumber(snapshot.flags) or nil
+        vehicle.metadata.flags = finiteNumber(snapshot.flags)
         Store.save(vehicle)
       end)
       if not ok then

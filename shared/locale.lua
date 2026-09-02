@@ -7,8 +7,7 @@ local FALLBACK = "en"
 
 local Locale = {}
 
---- Merges `strings` into the catalogue for `code`, so a gameplay file can register its own
---- keys next to the code that uses them.
+--- Merges `strings` into the catalogue for `code`.
 ---@param code string
 ---@param strings table<string, string>
 function Locale.register(code, strings)
@@ -20,8 +19,8 @@ function Locale.register(code, strings)
   for key, text in pairs(strings) do catalog[key] = text end
 end
 
---- Selects the catalogue player-facing text is read from. An unknown code is accepted: the
---- catalogues register after this file loads, and a code with no catalogue falls back.
+--- Selects the catalogue player-facing text is read from. An unknown code is accepted and
+--- falls back: catalogues register after this file loads.
 ---@param code string
 ---@return boolean applied
 function Locale.set(code)
@@ -60,6 +59,5 @@ OPX.Locale = Locale
 ---@type fun(key: string, params?: table<string, string|number>): string
 locale = Locale.t
 
--- the configured locale, applied at load: without this call LOCALE in config/shared.lua is
--- inert and an operator shipping "fr" reads English everywhere
+-- applied at load, or LOCALE in config/shared.lua is inert
 Locale.set(OPX.Config.SHARED and OPX.Config.SHARED.LOCALE)

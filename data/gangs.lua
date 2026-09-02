@@ -1,6 +1,5 @@
--- Gangs. Same rules as data/jobs.lua: the key is stored on the character row, so renaming one
--- orphans every member. Grades are contiguous from 0. `none` is the absence of a gang, kept
--- as an entry so no call site has to handle nil.
+-- Gangs. Same rules as data/jobs.lua: the key is stored on the character row, so add freely
+-- and rename never. `none` is the absence of a gang, kept as an entry so nothing handles nil.
 
 OPX.Gangs = {
   none = {

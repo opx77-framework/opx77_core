@@ -1,7 +1,5 @@
---- Structured logging for what an operator will be asked about later -- "who took 40 000
---- eddies out of the Valentinos account on Tuesday" -- as opposed to `OPX.Log`, which is for
---- what the code is doing. Console only: the runtime exposes no HTTP client and the sandbox
---- removes `io` and `os`, so the platform log is the sink.
+--- The player audit log: what an operator will be asked to account for later, as opposed to
+--- `Open77.log`, which is for what the code is doing. The platform log is the only sink.
 
 local Logger = {}
 
@@ -23,20 +21,16 @@ local MAX_MESSAGE = 200
 --- costs one line and a number instead of a screenful.
 local DEDUPE_MS = 10000
 
---- How long a closed window is kept afterwards, purely so the next entry of its kind can
---- say how many it stands for. Past this the entry answers nothing anybody will read.
+--- How long a closed window is kept, so the next entry of its kind can say how many it
+--- stands for.
 local RETAIN_MS = DEDUPE_MS * 6
 
---- key -> { at, count, owner }. `owner` is kept beside the key rather than parsed back out
---- of it: keys end in the source OR the citizen id, and an id that happened to look like the
---- other kind would otherwise be dropped with it.
+--- key -> { at, count, owner }. `owner` is kept beside the key rather than parsed back out of
+--- it, because a key ends in the source OR the citizen id.
 local recent = {}
 
---- Events that record what happened, as opposed to reporting a refusal. Each one is a
---- ledger line an operator will later be asked to account for, and six purchases in eight
---- seconds are six answers, not one -- so these are never collapsed. Refusals under the same
---- prefixes still are: `Logger.security` is the half a client can drive, and bounding that
---- is the whole reason the window exists.
+--- Event prefixes that are never collapsed: six purchases in eight seconds are six answers.
+--- Refusals under the same prefixes still are, through `severity`.
 local LEDGER_PREFIXES = { "money.", "character." }
 
 ---@param value any
@@ -49,9 +43,8 @@ local function bounded(value, maximum)
   return text
 end
 
---- Truncate and strip control characters. Published because anything a client chose reaches
---- the platform log through a format string, and a newline in it forges a whole log line
---- attributed to whatever resource the attacker names.
+--- Truncates and strips control characters. Published because a newline in client-chosen
+--- text forges a whole log line attributed to whatever resource the attacker names.
 ---@param value any
 ---@param maximum? integer
 ---@return string
@@ -92,13 +85,11 @@ local function isLedger(entry)
   return false
 end
 
---- When it was last worth walking `recent`. Sweeping on every entry would be a full table
---- scan per log line; once per window is enough to keep the table proportional to traffic.
+--- When it was last worth walking `recent`: sweeping per entry is a full table scan per log
+--- line.
 local nextSweepAt = 0
 
---- Drops entries nobody will read again. This, not `Logger.forget`, is what bounds the
---- table: an entry for a character with no source is keyed by citizen id, and no departing
---- source names it.
+--- Drops entries nobody will read again. This, not `Logger.forget`, is what bounds the table.
 ---@param now integer
 local function sweep(now)
   if now < nextSweepAt then return end
@@ -127,11 +118,10 @@ local function repeated(key, owner)
   return false, carried
 end
 
---- Dropped on departure, so a source that never returns does not hold a key forever. A
---- character logged without a source is keyed by its citizen id instead, which a departing
---- source does not name: pass the citizen id too when the caller has one.
+--- Dropped on departure, so a source that never returns does not hold a key forever.
 ---@param source Source
----@param citizenId? CitizenId
+---@param citizenId? CitizenId pass it when the caller has one: an entry logged without a
+---        source is keyed by citizen id, which a departing source does not name
 function Logger.forget(source, citizenId)
   local bySource = tostring(source)
   local byCitizen = citizenId ~= nil and tostring(citizenId) or nil
@@ -148,8 +138,7 @@ function Logger.log(entry)
   entry.severity = SEVERITIES[entry.severity] and entry.severity or "info"
   entry.message = entry.message ~= nil and bounded(entry.message, MAX_MESSAGE) or nil
 
-  -- a ledger event skips the window entirely: collapsing "six purchases in eight seconds"
-  -- into one line with no amounts destroys the record this file exists to keep
+  -- a ledger event skips the window entirely: collapsing it destroys the record
   if not isLedger(entry) then
     local owner = tostring(entry.source or entry.citizenId or "-")
     local again, carried = repeated(entry.event .. "\1" .. owner, owner)
@@ -159,7 +148,7 @@ function Logger.log(entry)
     end
   end
 
-  OPX.Log[entry.severity](("[log] %s"):format(toLine(entry)))
+  Open77.log[entry.severity](("[audit] %s"):format(toLine(entry)))
 end
 
 --- The two shapes that come up constantly, so call sites do not rebuild them.
@@ -182,8 +171,8 @@ end
 ---@param event string
 ---@param message? string
 ---@param data? table
----@param source? Source  who caused it: without one the dedupe key is global per event, and
----                        one player looping a refusal swallows every other player's
+---@param source? Source who caused it: without one the dedupe key is global per event, and
+---        one player looping a refusal swallows every other player's
 function Logger.security(event, message, data, source)
   Logger.log({ event = event, severity = "warn", message = message, data = data,
                source = source })

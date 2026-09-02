@@ -9,6 +9,9 @@ OPX.Locale.register("fr", {
   ["character.deleted"]      = "Personnage supprimé.",
   ["character.inUse"]        = "Ce personnage est déjà en jeu.",
 
+  ["appearance.invalid"]     = "Cette apparence n'a pas pu être lue.",
+  ["appearance.tooLarge"]    = "Cette apparence est trop volumineuse pour être enregistrée.",
+
   ["vehicle.notFound"]       = "Aucun véhicule ne porte cette plaque.",
   ["vehicle.limit"]          = "Ce personnage possède déjà autant de véhicules qu'il le peut.",
   ["vehicle.spawned"]        = "Véhicule {plate} sorti.",
@@ -31,7 +34,7 @@ OPX.Locale.register("fr", {
   ["money.negative"]         = "Ce solde ne peut pas devenir négatif.",
   ["money.vetoed"]           = "Cette transaction a été bloquée.",
   ["money.offline"]          = "Ce personnage n'est pas en jeu.",
-  ["money.paycheck"]         = "Vous avez reçu {amount} eddies pour {job}.",
+  ["money.paycheck"]         = "Vous avez reçu {amount} {type} pour {job}.",
   ["money.noPaycheckOffDuty"] = "Pas de paie : vous n'êtes pas en service.",
 
   ["job.updated"]            = "Vous êtes maintenant {grade} chez {job}.",
@@ -46,6 +49,19 @@ OPX.Locale.register("fr", {
   ["gang.notFound"]          = "Ce gang n'existe pas.",
   ["gang.gradeNotFound"]     = "Ce gang n'a pas ce grade.",
   ["gang.notMember"]         = "Vous n'êtes pas dans ce gang.",
+
+  ["command.inGameOnly"]     = "Cette commande doit être lancée en jeu.",
+  ["command.usage.select"]   = "usage : /opx77.select <identifiantCitoyen>",
+  ["command.usage.create"]   = "usage : /opx77.create <prénom> <nom> " ..
+                               "[nomad|streetkid|corpo] [female|male]",
+  ["command.usage.delete"]   = "usage : /opx77.delete <identifiantCitoyen>",
+  ["command.entered"]        = "Vous êtes en jeu avec {citizenId}.",
+  ["command.characterCount"] = "{count} personnage(s) :",
+  ["command.help.characters"] = "Lister vos personnages.",
+  ["command.help.select"]    = "Entrer en jeu avec un de vos personnages.",
+  ["command.help.create"]    = "Créer un personnage.",
+  ["command.help.delete"]    = "Supprimer un de vos personnages.",
+  ["command.help.duty"]      = "Prendre ou quitter votre service.",
 
   ["error.unavailable"]      = "Indisponible pour le moment.",
   ["error.badRequest"]       = "Requête incomprise.",

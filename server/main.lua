@@ -1,7 +1,5 @@
 --- The roster, and boot. A session is a connected machine; a Player is a loaded character.
 
-local log = OPX.Log.scope("core")
-
 --- playerId -> session. Everyone connected, character or not.
 ---@type table<Source, Session>
 OPX.Sessions = {}
@@ -40,8 +38,7 @@ local function displayNameOf(playerId)
 end
 
 --- The session for `playerId`, created if this VM has not seen them and dropped if the slot
---- now belongs to somebody else. Everything that wants a session goes through here, which is
---- what makes the recycling check unskippable.
+--- now belongs to somebody else. Everything that wants a session goes through here.
 ---@param playerId Source|string
 ---@return Session|nil
 function OPX.EnsureSession(playerId)
@@ -58,7 +55,8 @@ function OPX.EnsureSession(playerId)
   local session = OPX.Sessions[playerId]
   if session then
     if session.userId == userId then return session end
-    log.warn(("slot %d now belongs to a different account, evicting"):format(playerId))
+    Open77.log.warn(("[core] slot %d now belongs to a different account, evicting")
+      :format(playerId))
     OPX.ForgetSession(playerId)
   end
 
@@ -75,14 +73,12 @@ function OPX.EnsureSession(playerId)
 end
 
 --- Drops a session and, with it, any player still attached to the slot. The character is
---- logged out rather than dropped: this is the net for a departure nobody reported, and
---- what is in the roster has not been written since the last autosave.
+--- logged out rather than dropped: this is the net for a departure nobody reported.
 ---@param playerId Source
 function OPX.ForgetSession(playerId)
   local player = OPX.Players[playerId]
   if player then
-    -- the slot may already belong to somebody else, and the save samples by source:
-    -- sampling now would write their position onto this character's row
+    -- the slot may already belong to somebody else, and the save samples by source
     player.MaySample = false
     OPX.Logout(playerId)
   end
@@ -94,8 +90,7 @@ end
 function OPX.RegisterPlayer(player)
   local data = player.PlayerData
   -- a slot already holding somebody else means a second login raced this one: take the old
-  -- entry out of both indexes first, or byCitizenId keeps a row pointing at a character
-  -- nobody holds
+  -- entry out of both indexes first
   local occupant = OPX.Players[data.source]
   if occupant and occupant ~= player then OPX.UnregisterPlayer(occupant) end
   OPX.Players[data.source] = player
@@ -127,9 +122,8 @@ local function warnAboutPlacementConflicts()
     -- "starting" counts: a resource coming up will be placing players a moment from now
     local state = GetResourceState(name)
     if name ~= mine and (state == "running" or state == "starting") then
-      log.warn(("%s is running and also places players"):format(name))
-      log.warn("  two resources moving the same player means the last one wins, with no")
-      log.warn("  rule saying which. See CONFLICTING_PLACERS in config/server.lua.")
+      Open77.log.warn(("[core] %s is running and also places players; see " ..
+        "CONFLICTING_PLACERS in config/server.lua"):format(name))
     end
   end
 end
@@ -137,32 +131,34 @@ end
 --- Everything that has to happen before the first player may log in. On its own thread:
 --- migrations block on database round trips and the main chunk has to return promptly.
 CreateThread(function()
-  OPX.Log.setLevel(OPX.Config.SHARED.LOG_LEVEL)
-  log.info(("opx77_core %s starting"):format(OPX.VERSION))
+  Open77.log.info(("[core] opx77_core %s starting"):format(OPX.VERSION))
 
   local ready = OPX.Storage.ready()
   if ready then
     local migrated = OPX.Storage.migrate(OPX.Schema)
     if not migrated.ok then
       OPX.BootError = "migration failed: " .. tostring(migrated.error)
-      log.error("refusing to accept logins against an unknown schema")
+      Open77.log.error("[core] refusing to accept logins against an unknown schema")
     end
   else
     OPX.BootError = "no database"
   end
 
-  warnAboutPlacementConflicts()
+  local warned, warnError = pcall(warnAboutPlacementConflicts)
+  if not warned then
+    Open77.log.error("[core] the placement-conflict check raised: " .. tostring(warnError))
+  end
 
   if not OPX.Config.SHARED.DEFAULT_SPAWN.SET then
-    log.warn("DEFAULT_SPAWN.SET is false in config/shared.lua")
-    log.warn("  characters with no stored position will be left where the game put them.")
-    log.warn("  run `opx77.here` in game to print a coordinate in the right shape.")
+    Open77.log.warn("[core] DEFAULT_SPAWN.SET is false in config/shared.lua: characters " ..
+      "with no stored position are left where the game put them. Run `opx77.here` in game " ..
+      "to print a coordinate in the right shape.")
   end
 
   if OPX.BootError then
-    log.error(("opx77_core %s is up but cannot load characters: %s")
+    Open77.log.error(("[core] opx77_core %s is up but cannot load characters: %s")
       :format(OPX.VERSION, OPX.BootError))
   else
-    log.info(("opx77_core %s ready"):format(OPX.VERSION))
+    Open77.log.info(("[core] opx77_core %s ready"):format(OPX.VERSION))
   end
 end)

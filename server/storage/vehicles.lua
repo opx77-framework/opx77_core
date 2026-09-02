@@ -13,17 +13,18 @@ Vehicles.STATE = { OUT = 0, STORED = 1, IMPOUNDED = 2 }
 ---@param row table
 ---@return table
 local function toEntity(row)
+  local state = tonumber(row.state)
+  local health = tonumber(row.health)
   return {
     plate = row.plate,
     citizenId = row.citizen_id,
     record = row.record,
     appearance = row.appearance,
     garage = row.garage,
-    state = tonumber(row.state) or Vehicles.STATE.STORED,
-    health = tonumber(row.health) or 1.0,
-    -- the column is named `body` for history; it carries the whole damage view --
-    -- body, glass, lights, tires, detachedParts -- because storing only the grid
-    -- made a store-and-respawn cycle a free repair of everything else
+    state = OPX.Math.isFinite(state) and state or Vehicles.STATE.STORED,
+    health = OPX.Math.isFinite(health) and health or 1.0,
+    -- the `body` column carries the whole damage view: body, glass, lights, tires,
+    -- detachedParts
     damage = row.body and json.decode(row.body) or nil,
     paint = row.paint and json.decode(row.paint) or nil,
     metadata = row.metadata and json.decode(row.metadata) or {},
@@ -62,8 +63,7 @@ SELECT plate, citizen_id, record, appearance, garage, state, health, body, paint
   return Result.ok(toEntity(row.value))
 end
 
---- Creates one. The unique key on `plate` decides a collision, not a SELECT beforehand: two
---- callers in the same tick both pass that check and one takes the other's plate.
+--- Creates one. The unique key on `plate` decides a collision, not a SELECT beforehand.
 ---@param entity table
 ---@return table result
 function Vehicles.insert(entity)

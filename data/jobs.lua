@@ -1,7 +1,5 @@
--- Jobs. Definitions, not settings: the key is stored on the character row, so renaming one
--- orphans every character employed under it. Add freely, rename never. Grades are keyed from
--- 0 and must be contiguous -- a promotion is `grade + 1`. `isBoss` is published on
--- `PlayerData.job.isBoss`; what a boss may do is up to the gameplay file that asks.
+-- Jobs. Definitions, not settings: the key is stored on the character row, so add freely and
+-- rename never. Grades are keyed from 0 and must be contiguous.
 
 OPX.Jobs = {
   unemployed = {

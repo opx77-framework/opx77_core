@@ -4,8 +4,7 @@
 OPX.Config.SHARED = {
   SERVER_NAME = "OPX//77", -- shown in the launcher and in player-facing text
 
-  LOCALE = "fr", -- language for player-facing text; server logs stay in English
-  LOG_LEVEL = "info", -- "debug" | "info" | "warn" | "error" | "silent"
+  LOCALE = "en", -- language for player-facing text; server logs stay in English
 
   MONEY = {
     -- durable names: they become keys in the `money` JSON column, so adding one is free and
@@ -22,9 +21,18 @@ OPX.Config.SHARED = {
     NAME = { MIN = 2, MAX = 32 }, -- counted in characters, not bytes
   },
 
-  -- where a character with no stored position is placed. The zeros are not a real Night City
-  -- coordinate; run `opx77.here` in game to print your own in this exact shape. Nobody is
-  -- placed until SET is true.
+  APPEARANCE = {
+    -- Which catalogue a stored face may be read back into. A snapshot captured on another
+    -- build is refused; widening this does not make an old one fit.
+    GAME_BUILDS = { ["2.31"] = true },
+
+    -- The largest appearance document the core will accept, in bytes, measured on the
+    -- encoded JSON. A canonical snapshot of 256 options is far below it.
+    MAX_JSON_BYTES = 49152,
+  },
+
+  -- where a character with no stored position is placed. Nobody is placed until SET is true;
+  -- run `opx77.here` in game to print your own coordinate in this exact shape.
   DEFAULT_SPAWN = {
     SET = false,
     X = 0.0,
@@ -33,15 +41,7 @@ OPX.Config.SHARED = {
     HEADING = 0.0,
   },
 
-  -- The notification vocabulary, underscores rather than hyphens:
-  --   "middle_left" (the platform's own default) | "top_left" | "top_center" | "top_right"
-  --   | "bottom_left" | "bottom_center" | "bottom_right"
-  -- Anything else is not a documented value. The core warns about an unknown one and still
-  -- sends it: the server binary validates `position` not at all, and the resource that
-  -- renders the toast is a client resource the server cannot read -- so a whitelist that
-  -- guessed wrong would silently swallow every toast the core sends.
-  --
-  -- `opx77_notify` defaults to this same corner, so the framework's own toasts and a
-  -- third-party resource's land in one place without either having to be configured.
+  -- middle_left | top_left | top_center | top_right | bottom_left | bottom_center |
+  -- bottom_right. An unknown value is warned about and still sent.
   NOTIFY_POSITION = "top_right",
 }

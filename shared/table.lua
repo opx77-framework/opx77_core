@@ -1,6 +1,4 @@
---- The two table helpers with callers. Fourteen more lived here -- map, filter, reduce and
---- the rest -- and none was ever reached for in ten thousand lines; a helper comes back the
---- day a file needs it.
+--- Table helpers.
 
 local Table = {}
 

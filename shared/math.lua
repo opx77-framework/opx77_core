@@ -12,8 +12,8 @@ function Math.clamp(value, low, high)
   return value
 end
 
---- True only for a real, finite number. `n ~= n` is true for NaN alone, and NaN arrives
---- through JSON from a client, passes every comparison, and poisons any sum it lands in.
+--- True only for a real, finite number. NaN arrives through JSON from a client, passes every
+--- comparison, and poisons any sum it lands in.
 ---@param value any
 ---@return boolean
 function Math.isFinite(value)

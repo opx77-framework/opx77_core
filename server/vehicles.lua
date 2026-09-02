@@ -1,49 +1,26 @@
---- Vehicles a character owns: what exists, who owns it, and where it is.
----
---- The runtime id is not the identity. `Open77.vehicles.create` issues a 64-bit id, and the
---- documented policy is that stopping or reloading a resource removes every vehicle it owns
---- -- so the id is gone every reload while the car is not. The PLATE is the durable name, it
---- is what the row is keyed on, and every export takes one.
----
---- Ownership is proved here and nowhere else. A client names a plate; this file compares the
---- row's `citizen_id` against the character the connection has loaded, which is the row this
---- VM read. There is no client claim in that comparison.
+--- Vehicles a character owns. The plate is the identity, not the runtime id, and ownership is
+--- proved against the character the connection has loaded rather than any client claim.
 
-local Config = OPX_VEHICLES
+local Config = OPX.Config.VEHICLES
 local Store = OPX.Storage.Vehicles
 local Result = OPX.Result
-local log = OPX.Log.scope("vehicles")
 
 local Vehicles = {}
 OPX.Vehicles = Vehicles
 
---- plate -> { id, citizenId, bucket }. What is spawned right now. Rebuilt from nothing on a
---- reload, because the host removed every vehicle this resource owned when it stopped.
+--- plate -> { id, citizenId }. What is spawned right now, rebuilt from nothing on a reload.
 local live = {}
 
----@return integer
-local function nowMs()
-  return math.floor(Open77.time.monotonic() * 1000)
-end
-
---- The same predicate as `finite` elsewhere in this framework, coercing first and answering
---- with the number: anything `tonumber` accepts, so long as it is neither NaN nor either
---- infinity. It carries no range of its own -- a caller that needs one applies it to the
---- answer -- so that "finite" means exactly one thing everywhere and a bound stays visible
---- where it bites.
+--- The number `value` is, or nil when it is not a real finite one.
 ---@param value any
 ---@return number|nil
 local function finiteNumber(value)
   value = tonumber(value)
-  -- `value ~= value` is the NaN check, not a typo: NaN is the one value unequal to itself
-  if value == nil or value ~= value or value == math.huge or value == -math.huge then
-    return nil
-  end
+  if not OPX.Math.isFinite(value) then return nil end
   return value
 end
 
---- A plate in the configured shape. Uppercase ASCII only: the column is `ascii_bin`, and a
---- plate is compared for equality far more often than it is read.
+--- A plate in the configured shape. Uppercase ASCII only: the column is `ascii_bin`.
 ---@return string
 local function plate()
   local out = {}
@@ -108,7 +85,8 @@ function Vehicles.Give(citizenId, record, options)
     }
     local inserted = Store.insert(entity)
     if inserted.ok then
-      log.info(("%s given %s (%s)"):format(citizenId, entity.plate, record))
+      Open77.log.info(("[vehicles] %s given %s (%s)")
+        :format(citizenId, entity.plate, record))
       return Result.ok(entity)
     end
     -- a duplicate plate is the only failure worth retrying; anything else is the database
@@ -140,10 +118,8 @@ end
 -- Spawning
 -- ---------------------------------------------------------------------------
 
---- Put a character's vehicle in the world beside them.
----
---- Ownership is checked against the loaded character, never against anything the caller sent.
---- Coroutine only.
+--- Puts a character's vehicle in the world beside them. Ownership is checked against the
+--- loaded character, never against anything the caller sent. Coroutine only.
 ---@param source Source
 ---@param plateId string
 ---@return table result  Result of { plate, id }
@@ -178,32 +154,29 @@ function Vehicles.Spawn(source, plateId)
   })
   if id == nil then return Result.err("vehicle.spawnRefused", tostring(reason)) end
 
-  -- Given BACK. Without this the row's damage is write-only and a store-then-spawn cycle is a
-  -- free repair of glass, lights, tyres, dents and the destroyed flag -- the one thing the
-  -- platform deliberately refuses a client.
+  -- given back, or a store-then-spawn cycle is a free repair of glass, lights, tyres, dents
+  -- and the destroyed flag
   if type(vehicle.damage) == "table" then
     Open77.vehicles.setDamage(id, vehicle.damage)
   end
-  local flags = tonumber(vehicle.metadata and vehicle.metadata.flags)
+  local flags = finiteNumber(vehicle.metadata and vehicle.metadata.flags)
   if flags ~= nil then Open77.vehicles.update(id, { flags = flags }) end
 
-  -- re-read the connection: `Store.fetchOne` above yielded, and the player may have switched
-  -- character or left in that window. Writing `live` for a character that is gone strands a
-  -- vehicle nothing will ever store, because the departure sweep has already run.
+  -- re-read the connection: the fetch above yielded, and writing `live` for a character who
+  -- has since left strands a vehicle nothing will ever store
   local still = character(source)
   if not still or still.citizenId ~= data.citizenId then
     Open77.vehicles.remove(id)
     return Result.err("error.notLoggedIn", tostring(source))
   end
 
-  live[plateId] = { id = id, citizenId = data.citizenId, bucket = position.bucket,
-                    atMs = nowMs() }
+  live[plateId] = { id = id, citizenId = data.citizenId }
   Store.setState(plateId, Store.STATE.OUT)
   OPX.Logger.player(OPX.GetPlayer(source), "vehicle.spawn", plateId, { id = tostring(id) })
   return Result.ok({ plate = plateId, id = id })
 end
 
---- Take it back off the world and write what happened to it.
+--- Takes it back off the world and writes what happened to it. Coroutine only.
 ---@param plateId string
 ---@param garage? string  where it belongs now; omitted keeps the one it had
 ---@return table result
@@ -220,7 +193,7 @@ function Vehicles.Store(plateId, garage)
       vehicle.health = finiteNumber(snapshot.health) or vehicle.health
       vehicle.damage = Open77.vehicles.getDamage(record.id)
       vehicle.metadata = vehicle.metadata or {}
-      vehicle.metadata.flags = tonumber(snapshot.flags) or nil
+      vehicle.metadata.flags = finiteNumber(snapshot.flags)
       vehicle.state = Store.STATE.STORED
       if garage ~= nil then vehicle.garage = garage end
       Store.save(vehicle)
@@ -235,13 +208,11 @@ function Vehicles.Store(plateId, garage)
 end
 
 --- Everything this character has out, stored. Called on logout and on a resource stop.
----@param citizenId string
+---@param citizenId string|nil nil stores every live vehicle
 ---@return integer stored
 function Vehicles.StoreAll(citizenId)
-  -- The plates are collected BEFORE anything yields. `Vehicles.Store` awaits the database
-  -- twice, and a spawn landing during either one inserts a key into the table being walked --
-  -- which is Lua's undefined case for `next`: the rehash silently skips entries, and a car
-  -- that is skipped here is left in the street with nobody connected.
+  -- plates collected BEFORE anything yields: a spawn landing mid-walk inserts a key into the
+  -- table being iterated, which is Lua's undefined case for `next`
   local plates = {}
   for plateId, record in pairs(live) do
     if citizenId == nil or record.citizenId == citizenId then plates[#plates + 1] = plateId end
@@ -260,40 +231,37 @@ end
 -- Keeping the world and the rows in step
 -- ---------------------------------------------------------------------------
 
---- A character leaving takes its cars with it. Without this they sit in the street with an
---- owner who is not connected, and the host removes them on the next reload anyway -- with
---- whatever damage they took since the last save unwritten.
+--- A character leaving takes its cars with it, so their condition is written rather than
+--- lost to the host's next reload.
 AddEventHandler(OPX.Events.Internal.PLAYER_UNLOADED, function(_, playerData)
   if type(playerData) ~= "table" then return end
   local stored = Vehicles.StoreAll(playerData.citizenId)
   if stored > 0 then
-    log.debug(("%s left with %d vehicle(s) out"):format(playerData.citizenId, stored))
+    Open77.log.debug(("[vehicles] %s left with %d vehicle(s) out")
+      :format(playerData.citizenId, stored))
   end
 end)
 
---- The host removed one: it was destroyed, or another resource took it. Forget the id rather
---- than trying to write through it.
+--- The host removed one: it was destroyed, or another resource took it.
 AddEventHandler("onVehicleRemoved", function(id, reason)
   id = tonumber(id)
   for plateId, record in pairs(live) do
     if record.id == id then
       live[plateId] = nil
       Store.setState(plateId, Store.STATE.STORED)
-      log.info(("%s removed: %s"):format(plateId, tostring(reason)))
+      Open77.log.info(("[vehicles] %s removed: %s"):format(plateId, tostring(reason)))
       return
     end
   end
 end)
 
---- Condition, written while the vehicle is still out. Damage a player took thirty minutes ago
---- is lost otherwise: the row is only written when the car is put away, and a crash, a reload
---- or a disconnect at the wrong moment never gets there.
+--- Condition, written while the vehicle is still out. This loop is the guarantee that damage
+--- is kept, not the stop handler below.
 CreateThread(function()
   while true do
     Wait(Config.SAVE_SECONDS * 1000)
-    -- snapshot the keys first, for the reason StoreAll does; and wrapped, because this is a
-    -- bare `while true` with no restart -- one raise ends condition persistence for the whole
-    -- process, silently, and the only writes left would be put-away and logout
+    -- keys snapshotted and each save wrapped: one raise would end condition persistence for
+    -- the whole process, silently
     local plates = {}
     for plateId in pairs(live) do plates[#plates + 1] = plateId end
 
@@ -310,43 +278,48 @@ CreateThread(function()
         vehicle.health = finiteNumber(snapshot.health) or vehicle.health
         vehicle.damage = Open77.vehicles.getDamage(record.id)
         vehicle.metadata = vehicle.metadata or {}
-        vehicle.metadata.flags = tonumber(snapshot.flags) or nil
+        vehicle.metadata.flags = finiteNumber(snapshot.flags)
         Store.save(vehicle)
       end)
-      if not ok then log.error(("saving %s: %s"):format(plateId, tostring(err))) end
+      if not ok then
+        Open77.log.error(("[vehicles] saving %s: %s"):format(plateId, tostring(err)))
+      end
     end
   end
 end)
 
---- A resource stop removes every vehicle it owns, so the rows are written first.
+--- A resource stop removes every vehicle it owns, so the rows are written first. Not
+--- dispatched to a thread: a stop does not resume one.
 AddEventHandler("onResourceStop", function(name)
   if name ~= GetCurrentResourceName() then return end
-  -- Not dispatched to a thread: a stop does not resume one. Every database call here yields,
-  -- so whether the rows land depends on how far the host lets this handler run -- which is
-  -- why the periodic save above exists and is the guarantee, not this.
   local stored = Vehicles.StoreAll(nil)
-  if stored > 0 then log.info(("stored %d vehicle(s) on stop"):format(stored)) end
+  if stored > 0 then
+    Open77.log.info(("[vehicles] stored %d vehicle(s) on stop"):format(stored))
+  end
 end)
 
 -- ---------------------------------------------------------------------------
 -- Client to server
 -- ---------------------------------------------------------------------------
 
---- A player asking for one of their own cars. Everything is re-derived: the character comes
---- from the connection, the ownership from the row.
+--- A player asking for one of their own cars. Everything is re-derived: the character from
+--- the connection, the ownership from the row.
 RegisterNetEvent(OPX.Events.Server.SPAWN_VEHICLE, function(payload)
   local src = tonumber(source)
   if not src then return end
+  local operation = OPX.Operations.SPAWN_VEHICLE
   local plateId = type(payload) == "table" and payload.plate or nil
-  if type(plateId) ~= "string" then return OPX.Refuse(src, "error.badRequest") end
+  if type(plateId) ~= "string" then
+    return OPX.Refuse(src, "error.badRequest", operation)
+  end
   if OPX.Cooling(src, "vehicle.spawn", 3000) then
-    return OPX.Refuse(src, "error.tooFast")
+    return OPX.Refuse(src, "error.tooFast", operation)
   end
 
   CreateThread(function()
     local spawned = Vehicles.Spawn(src, plateId)
     if not spawned.ok then
-      OPX.Refuse(src, spawned.error)
+      OPX.Refuse(src, spawned.error, operation)
       OPX.NotifyLocale(src, spawned.error, nil, "error")
       return
     end
@@ -357,22 +330,25 @@ end)
 RegisterNetEvent(OPX.Events.Server.STORE_VEHICLE, function(payload)
   local src = tonumber(source)
   if not src then return end
+  local operation = OPX.Operations.STORE_VEHICLE
   local plateId = type(payload) == "table" and payload.plate or nil
-  if type(plateId) ~= "string" then return OPX.Refuse(src, "error.badRequest") end
+  if type(plateId) ~= "string" then
+    return OPX.Refuse(src, "error.badRequest", operation)
+  end
   if OPX.Cooling(src, "vehicle.store", 3000) then
-    return OPX.Refuse(src, "error.tooFast")
+    return OPX.Refuse(src, "error.tooFast", operation)
   end
 
   CreateThread(function()
-    -- ownership, before anything is taken off the world: `live` is keyed by plate and a
-    -- player could otherwise store somebody else's car by naming its plate
+    -- ownership before anything is taken off the world: `live` is keyed by plate, so a
+    -- player could otherwise store somebody else's car by naming it
     local data = character(src)
     local record = live[plateId]
     if not data or record == nil or record.citizenId ~= data.citizenId then
-      return OPX.Refuse(src, "vehicle.notFound")
+      return OPX.Refuse(src, "vehicle.notFound", operation)
     end
     local put = Vehicles.Store(plateId)
-    if not put.ok then return OPX.Refuse(src, put.error) end
+    if not put.ok then return OPX.Refuse(src, put.error, operation) end
     OPX.NotifyLocale(src, "vehicle.stored", { plate = plateId }, "success")
   end)
 end)

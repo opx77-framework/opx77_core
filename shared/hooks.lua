@@ -1,12 +1,5 @@
---- Extension points, so a gameplay file added to this resource stays additive instead of
---- editing server/player.lua. A hook runs inside the operation it guards, so one that yields
---- stalls a money transfer.
----
----   OPX.Hooks.register("money:beforeRemove", function(payload)
----     if payload.moneyType == "BANK" and payload.player.PlayerData.metadata.frozen then
----       return false
----     end
----   end)
+--- Extension points, so a gameplay file added to this resource stays additive. A hook runs
+--- inside the operation it guards, so one that yields stalls a money transfer.
 
 local Hooks = {}
 
@@ -72,7 +65,8 @@ function Hooks.trigger(name, payload)
     -- pcall: a hook belongs to somebody else's file, and a broken one is no opinion
     local ok, verdict = pcall(list[i].fn, payload)
     if not ok then
-      OPX.Log.error(("hook %s (#%d) raised: %s"):format(name, list[i].id, tostring(verdict)))
+      Open77.log.error(("[hooks] %s (#%d) raised: %s")
+        :format(name, list[i].id, tostring(verdict)))
     elseif verdict == false then
       return false
     end

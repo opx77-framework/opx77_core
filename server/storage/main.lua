@@ -1,11 +1,7 @@
 --- Database access. Every call yields, so every one must be made from inside a CreateThread.
---- `MySQL.<method>.await` RAISES rather than answering `value, reason`, so each is wrapped in
---- pcall and turned into a Result. Named parameters throughout, never positional `?`, because
---- the bridge rewrites `?` by scanning the statement -- which is also why no SQL string in
---- this resource carries a comment.
+--- Named parameters throughout: the bridge rewrites `?` by scanning the statement.
 
 local Result = OPX.Result
-local log = OPX.Log.scope("storage")
 
 local Storage = {}
 
@@ -13,8 +9,8 @@ local Storage = {}
 local ready = nil
 local readyReason = "not probed"
 
---- Runs one bridge method and blocks until it answers. The pcall is not optional: an await
---- that raises inside a CreateThread kills it silently, and that thread is usually a login.
+--- Runs one bridge method and blocks until it answers. `MySQL.<method>.await` raises rather
+--- than answering `value, reason`, and a raise inside a CreateThread kills it silently.
 local function run(method, sql, params)
   local api = rawget(_G, "MySQL")
   local fn = api and api[method]
@@ -93,8 +89,9 @@ function Storage.ready()
   if not probe.ok then
     ready = false
     readyReason = tostring(probe.detail)
-    log.error("no database: " .. readyReason)
-    log.error("the core will boot, but nobody can be logged in until this is fixed")
+    Open77.log.error("[storage] no database: " .. readyReason)
+    Open77.log.error("[storage] the core will boot, but nobody can be logged in until this " ..
+      "is fixed")
     return false, readyReason
   end
 
@@ -103,9 +100,8 @@ function Storage.ready()
   return true, readyReason
 end
 
---- Applies pending migrations in order, keyed by name and never by position: an index
---- renumbers the moment one is inserted in the middle. Stops at the first failure, because a
---- half-applied schema is the one state neither rolling forward nor back is safe from.
+--- Applies pending migrations in order, keyed by name and never by position. Stops at the
+--- first failure rather than leaving a half-applied schema.
 ---@param migrations Migration[]
 ---@return Result  ok value is the number applied
 function Storage.migrate(migrations)
@@ -116,7 +112,8 @@ CREATE TABLE IF NOT EXISTS opx77_migrations (
 ) ENGINE=InnoDB
   ]])
   if not created.ok then
-    log.error("cannot create the migration table: " .. tostring(created.detail))
+    Open77.log.error("[storage] cannot create the migration table: " ..
+      tostring(created.detail))
     return created
   end
 
@@ -131,13 +128,13 @@ CREATE TABLE IF NOT EXISTS opx77_migrations (
   for i = 1, #migrations do
     local migration = migrations[i]
     if not applied[migration.name] then
-      log.info(("applying migration %s"):format(migration.name))
+      Open77.log.info(("[storage] applying migration %s"):format(migration.name))
 
       local statements = migration.statements
       for j = 1, #statements do
         local run_ = Storage.execute(statements[j])
         if not run_.ok then
-          log.error(("migration %s statement %d failed: %s")
+          Open77.log.error(("[storage] migration %s statement %d failed: %s")
             :format(migration.name, j, tostring(run_.detail)))
           return Result.err("migration-failed", migration.name)
         end
@@ -150,7 +147,8 @@ CREATE TABLE IF NOT EXISTS opx77_migrations (
     end
   end
 
-  log.info(count == 0 and "schema is up to date" or ("%d migration(s) applied"):format(count))
+  Open77.log.info("[storage] " ..
+    (count == 0 and "schema is up to date" or ("%d migration(s) applied"):format(count)))
   return Result.ok(count)
 end
 

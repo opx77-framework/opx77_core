@@ -1,20 +1,14 @@
 --- The Player object: PlayerData, its Functions, and login/logout/save.
----
----   player.Functions.AddMoney("EDDIES", 500, "gig payout")
----   OPX.AddMoney(citizenId, "EDDIES", 500, "gig payout")
----
---- The module-level form is the implementation and `Functions` binds the player into it, so a
---- rule added to one is a rule both obey. Money is whole eddies: a fractional balance
---- round-tripped through a JSON column drifts.
 
 local Result = OPX.Result
-local log = OPX.Log.scope("player")
 
 local Config = OPX.Config.SERVER
 local Shared = OPX.Config.SHARED
 
---- Fills in anything a stored entity is missing: refusing to load a character because it
---- predates a field is, in effect, deleting it.
+--- Fills in anything a stored entity is missing, so a character that predates a field loads
+--- instead of being refused.
+---@param entity table
+---@return table entity
 local function normalise(entity)
   entity.charInfo = entity.charInfo or {}
   entity.metadata = entity.metadata or {}
@@ -31,6 +25,8 @@ local function normalise(entity)
       entity.metadata[key] = OPX.Table.deepCopy(value)
     end
   end
+
+  if type(entity.appearance) ~= "table" then entity.appearance = nil end
 
   -- a job deleted from data/ falls back; the membership row is left alone, mid-edit or not
   local job = OPX.ResolveJob(entity.job and entity.job.name, entity.job and entity.job.grade
@@ -52,26 +48,20 @@ end
 
 OPX.NormaliseEntity = normalise
 
---- Builds a Player around a stored entity. `Revision` and `MaySample` sit on the Player
---- rather than on PlayerData, which keeps them out of the client payload and every column.
+--- Builds a Player around a stored entity.
 ---@param entity table
----@param offline? boolean an offline Player has the same Functions, but sends and places
----        nothing, and the money mutators refuse it: nothing writes a money column for a
----        Player that is not in the roster, so a credit there would be announced and
----        audited and then lost
+---@param offline? boolean an offline Player sends and places nothing, and the money mutators
+---        refuse it: no money column is written for a Player outside the roster
 ---@return Player
 function OPX.CreatePlayer(entity, offline)
   local self = { Offline = offline == true }
 
   --- The autosave's dirty flag, bumped by every change and never reset. It moves only in
-  --- `Functions.UpdatePlayerData`, so a gameplay file assigning into PlayerData directly
-  --- makes a change this counter cannot see.
+  --- `Functions.UpdatePlayerData`.
   self.Revision = 0
 
-  --- False until the world agrees with the stored row. A character whose placement failed is
-  --- standing wherever the engine dropped them, and sampling that overwrites the very
-  --- position placement was trying to restore. `OPX.PlaceCharacter` is the only setter to
-  --- true; `OPX.ForgetSession` clears it before an eviction save.
+  --- False until the world agrees with the stored row. `OPX.PlaceCharacter` is the only
+  --- setter to true; `OPX.ForgetSession` clears it before an eviction save.
   self.MaySample = false
 
   self.PlayerData = normalise(entity)
@@ -95,25 +85,32 @@ function OPX.CreatePlayer(entity, offline)
     TriggerClientEvent(OPX.Events.Client.SET_PLAYER_DATA, self.PlayerData.source, self.PlayerData)
   end
 
+  ---@param key string
+  ---@param value any
   function Functions.SetPlayerData(key, value)
     if key == "citizenId" or key == "userId" or key == "source" then
-      -- identity is not data: this is how a character ends up owned by the wrong account
       error(("PlayerData.%s is identity and cannot be set"):format(key), 2)
     end
     self.PlayerData[key] = value
     Functions.UpdatePlayerData()
   end
 
+  ---@param key string
+  ---@param value any
   function Functions.SetMetaData(key, value)
     self.PlayerData.metadata[key] = value
     Functions.UpdatePlayerData()
   end
 
+  ---@param key? string nil returns the whole metadata table
+  ---@return any
   function Functions.GetMetaData(key)
     if key == nil then return self.PlayerData.metadata end
     return self.PlayerData.metadata[key]
   end
 
+  ---@param key string
+  ---@param value any
   function Functions.SetCharInfo(key, value)
     self.PlayerData.charInfo[key] = value
     Functions.UpdatePlayerData()
@@ -159,8 +156,7 @@ function OPX.CreatePlayer(entity, offline)
   return self
 end
 
---- Every module-level mutator starts with this, so no call site has to know which of the
---- three shapes it is holding.
+--- Resolves any of the three shapes a caller may hold into a Player.
 ---@param identifier Player|Source|CitizenId
 ---@return Player|nil
 local function resolve(identifier)
@@ -172,9 +168,10 @@ end
 
 OPX.ResolvePlayer = resolve
 
---- Refuses anything that is not a positive, finite, real amount. NaN is the case worth
---- naming: it arrives over JSON, passes every comparison, and once it is in a balance so does
---- the check that would stop the player spending it.
+--- A positive, finite, whole amount, or nil. NaN arrives over JSON and passes every
+--- comparison, including the one that would stop the player spending it.
+---@param value any
+---@return integer|nil
 local function amountOf(value)
   local n = tonumber(value)
   if not OPX.Math.isFinite(n) then return nil end
@@ -185,6 +182,11 @@ end
 
 --- Announces a balance change to its four audiences: the owning client, this resource's own
 --- files, the audit log, and PlayerData itself.
+---@param player Player
+---@param moneyType MoneyType
+---@param amount integer
+---@param action "add"|"remove"|"set"
+---@param reason? string
 local function announceMoney(player, moneyType, amount, action, reason)
   local data = player.PlayerData
   player.Functions.UpdatePlayerData()
@@ -194,7 +196,7 @@ local function announceMoney(player, moneyType, amount, action, reason)
       moneyType, amount, action, data.money[moneyType])
   end
 
-  -- data.source is nil offline, honestly: the citizen id is the field to key on
+  -- data.source is nil offline: the citizen id is the field to key on
   TriggerEvent(OPX.Events.Internal.MONEY_CHANGE,
     data.source, data.citizenId, moneyType, amount, action, reason,
     data.money[moneyType])
@@ -216,7 +218,8 @@ function OPX.AddMoney(identifier, moneyType, amount, reason)
   if not player then return false, "error.notLoggedIn" end
   if player.Offline then return false, "money.offline" end
   if not OPX.IsMoneyType(moneyType) then
-    log.error(("AddMoney: %q is not a money type on this server"):format(tostring(moneyType)))
+    Open77.log.error(("[player] AddMoney: %q is not a money type on this server")
+      :format(tostring(moneyType)))
     return false, "money.badType"
   end
 
@@ -253,7 +256,8 @@ function OPX.RemoveMoney(identifier, moneyType, amount, reason)
   if not player then return false, "error.notLoggedIn" end
   if player.Offline then return false, "money.offline" end
   if not OPX.IsMoneyType(moneyType) then
-    log.error(("RemoveMoney: %q is not a money type on this server"):format(tostring(moneyType)))
+    Open77.log.error(("[player] RemoveMoney: %q is not a money type on this server")
+      :format(tostring(moneyType)))
     return false, "money.badType"
   end
 
@@ -283,7 +287,7 @@ function OPX.RemoveMoney(identifier, moneyType, amount, reason)
 end
 
 --- Sets a balance outright. Zero is allowed here and nowhere else: it is the only way to
---- empty an account, where in Add/Remove a zero is a caller's arithmetic having gone wrong.
+--- empty an account.
 ---@param identifier Player|Source|CitizenId
 ---@param moneyType MoneyType
 ---@param amount number
@@ -323,6 +327,7 @@ function OPX.GetMoney(identifier, moneyType)
   return player.PlayerData.money[moneyType]
 end
 
+--- Free-form character state; `health`, `armor`, `isDead` and `inLastStand` live here too.
 ---@param identifier Player|Source|CitizenId
 ---@param key string
 ---@param value any
@@ -343,10 +348,8 @@ function OPX.GetMetadata(identifier, key)
   return player.Functions.GetMetaData(key)
 end
 
---- Re-derives a position from `Open77.players.position`; the client's report is only ever a
---- hint, and `heading` is the one field taken from it. False leaves the last known position
---- in place rather than overwriting it with nothing -- "cannot tell" and "here" must never
---- collapse into each other.
+--- Re-derives a position from `Open77.players.position`; `heading` is the one field taken
+--- from the client's report. False leaves the last known position in place.
 ---@param player Player
 ---@return boolean sampled
 function OPX.SamplePosition(player)
@@ -412,27 +415,11 @@ function OPX.Login(source, citizenId)
   OPX.RegisterPlayer(player)
   session.citizenId = citizenId
 
-  -- There used to be a `TriggerEvent("open77:appearance:setCharacter", source, citizenId)`
-  -- here, on the belief that the host fanned that name into open77_appearance's VM. It does
-  -- not: a server-side `TriggerEvent` walks the handler table of its own VM and nothing else,
-  -- the host fans only its own closed set of names (`onPlayerConnected`, `onPlayerDisconnected`,
-  -- `onPlayerReady`, `onResourceStart`/`Stop`, `onTunableChanged`, the NPC events), and the
-  -- string `open77:appearance:setCharacter` appears in no shipped assembly. The call reached
-  -- nothing and did not fail either -- it did nothing, silently -- so it is gone rather than
-  -- rewritten. See docs/unknowns.md, "RÉFUTÉ : `TriggerEvent` ne franchit pas les VM serveur".
-  --
-  -- Nothing is lost by dropping it. The citizen id *is* the appearance service's character
-  -- key, and the wire event on the next line carries it to the owning client inside
-  -- `PlayerData.citizenId`; the core's client half then re-emits it as
-  -- `OPX.Events.Local.PLAYER_LOADED` on the client-local bus, which unlike the server's is
-  -- host-wide. An appearance resource that wants to follow the live character listens there,
-  -- with a bare `AddEventHandler` and no permission. That is the only channel that can work
-  -- from here, and it is already open.
   TriggerClientEvent(OPX.Events.Client.PLAYER_LOADED, source, player.PlayerData)
   TriggerEvent(OPX.Events.Internal.PLAYER_LOADED, source, player.PlayerData)
 
   OPX.Logger.player(player, "character.login", "logged in")
-  log.info(("%s (%s) logged in as %s %s"):format(
+  Open77.log.info(("[player] %s (%s) logged in as %s %s"):format(
     session.displayName, citizenId,
     player.PlayerData.charInfo.firstName or "?",
     player.PlayerData.charInfo.lastName or "?"))
@@ -452,7 +439,7 @@ function OPX.Save(identifier, loggedOut)
 
   local saved = OPX.Storage.Players.save(player.PlayerData, loggedOut)
   if not saved.ok then
-    log.error(("save failed for %s: %s")
+    Open77.log.error(("[player] save failed for %s: %s")
       :format(player.PlayerData.citizenId, tostring(saved.detail)))
   end
   return saved
@@ -481,7 +468,7 @@ function OPX.Logout(source)
   end)
 end
 
---- Log a character out and WAIT for its row, which is what a SWITCH needs: `OPX.Logout`
+--- Logs a character out and WAITS for its row, which is what a switch needs: `OPX.Logout`
 --- dispatches, and the read for the next character would beat that thread to the database.
 ---@param source Source
 ---@return Result

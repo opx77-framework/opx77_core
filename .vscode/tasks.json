@@ -2,11 +2,19 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "OPX//77 : contrôle de syntaxe",
-      "detail": "luac -p sur tous les fichiers sauf le manifeste, qui n'est pas du Lua standard.",
+      "label": "OPX//77: syntax check",
+      "detail": "luac -p over every file but the manifest, which is not standard Lua.",
       "type": "shell",
       "command": "find . -name '*.lua' -not -name 'open77.lua' -not -path './.git/*' -exec luac5.4 -p {} +",
       "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "OPX//77: sql/ and schema.lua parity",
+      "detail": "Checks that sql/*.sql and server/storage/schema.lua carry the same statements.",
+      "type": "shell",
+      "command": "python3 tools/check_sql_parity.py",
+      "group": "test",
       "problemMatcher": []
     }
   ]

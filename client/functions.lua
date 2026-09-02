@@ -1,5 +1,5 @@
 --- Client helpers: the read side, answered from the mirrored PlayerData. None of it is
---- authoritative -- the server checks again before anything happens.
+--- authoritative; the server checks again before anything happens.
 
 --- The mirrored PlayerData, or an empty table. Never nil, so a caller can index into it
 --- without guarding; the honest question is `OPX.IsLoggedIn`.
@@ -23,10 +23,7 @@ function OPX.GetGangData()
   return OPX.PlayerData.gang
 end
 
---- `minGrade` is the THIRD parameter, not the second, so every call written against the
---- two-argument form keeps the meaning it had: a caller who passed a grade where
---- `onDutyOnly` lives was getting a silent true at grade 0, and moving the parameter
---- would have turned that into a silent false instead.
+--- Whether the live character holds `name` as their primary job.
 ---@param name string
 ---@param onDutyOnly? boolean
 ---@param minGrade? integer when given, the held grade level must be >= this
@@ -42,9 +39,8 @@ function OPX.HasJob(name, onDutyOnly, minGrade)
   return true
 end
 
---- Same grade check as OPX.HasJob, and for the same reason it is appended rather than
---- inserted. There is no duty parameter because a gang has no shifts: duty is a property
---- of the primary job only.
+--- Whether the live character holds `name` as their primary gang. No duty parameter: a gang
+--- has no shifts.
 ---@param name string
 ---@param minGrade? integer when given, the held grade level must be >= this
 ---@return boolean
@@ -58,8 +54,8 @@ function OPX.HasGang(name, minGrade)
   return true
 end
 
---- Job grade level, or -1 when the character does not hold it. Minus one rather than nil so
---- grade 0 -- a real, common grade -- is never mistaken for absence.
+--- Job grade level, or -1 when the character does not hold it. Minus one rather than nil, so
+--- grade 0 is never mistaken for absence.
 ---@param name? string
 ---@return integer
 function OPX.GetJobGrade(name)
@@ -76,6 +72,7 @@ function OPX.GetMoney(moneyType)
   return money[moneyType] or 0
 end
 
+--- Free-form character state; `health`, `armor`, `isDead` and `inLastStand` live here too.
 ---@param key? string nil returns the whole metadata table
 ---@return any
 function OPX.GetMetadata(key)
@@ -85,10 +82,14 @@ function OPX.GetMetadata(key)
   return metadata[key]
 end
 
---- The local player's position, flattened so the wire format and the shared math helpers
---- see one shape. `Open77.character.position()` returns THREE numbers, not a vector and not
---- a table, so it is destructured rather than indexed: indexing the first return value was
---- indexing a number, which answers nil for every axis.
+--- The stored face for the live character, or nil for one that has never been captured.
+---@return AppearanceSnapshot|nil
+function OPX.GetAppearance()
+  return OPX.PlayerData.appearance
+end
+
+--- The local player's position, flattened so the wire format and the shared math helpers see
+--- one shape. `Open77.character.position()` answers three numbers, not a table.
 ---@return Vector3Like|nil
 function OPX.GetPosition()
   local x, y, z = Open77.character.position()

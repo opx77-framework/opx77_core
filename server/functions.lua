@@ -1,11 +1,10 @@
 --- The getters and the server-side helpers everything uses. None of them yield, so they are
---- callable from an event handler without a thread. `OPX.*` is the server API: the runtime
---- installs no `exports`, so a second server resource could not call this one anyway.
+--- callable from an event handler without a thread.
 
 local Result = OPX.Result
 
---- The loaded character at `source`, or nil. Nil includes somebody still choosing one: it is
---- not an error, and a caller that treats it as one refuses legitimate joins.
+--- The loaded character at `source`, or nil. Nil includes somebody still choosing one, which
+--- is not an error.
 ---@param source Source|string
 ---@return Player|nil
 function OPX.GetPlayer(source)
@@ -27,8 +26,7 @@ function OPX.GetPlayerByUserId(userId)
 end
 
 --- Every loaded character. Iterate this rather than `pairs(OPX.Players)`: the walk also
---- evicts any slot whose userId no longer matches, through `OPX.ForgetSession`, which logs
---- the character out, which saves.
+--- evicts any slot whose userId no longer matches, which logs that character out and saves.
 ---@return Player[]
 function OPX.GetPlayers()
   local out, n = {}, 0
@@ -47,8 +45,6 @@ function OPX.GetPlayers()
   end
 
   for i = 1, staleCount do
-    -- ForgetSession clears MaySample before logging out, so the eviction save cannot write
-    -- the new occupant of a recycled slot into the departed character's row
     OPX.ForgetSession(stale[i])
   end
   return out
@@ -64,8 +60,8 @@ function OPX.GetPlayerCount()
   return n
 end
 
---- A character online or not, so a caller does not have to ask "are they here" first. The
---- offline shape is a bare entity with no `Functions`. Yields when offline: coroutine only.
+--- A character online or not. The offline shape is a bare entity with no `Functions`.
+--- Yields when offline: coroutine only.
 ---@param citizenId CitizenId
 ---@return Result  ok value is { player, offline = false } or { entity, offline = true }
 function OPX.GetCharacter(citizenId)
@@ -77,10 +73,8 @@ function OPX.GetCharacter(citizenId)
   return Result.ok({ entity = fetched.value, offline = true })
 end
 
--- How long an identical answer to the same source is suppressed. The cooldowns below guard
--- the write; this guards the reply, which is the cheaper branch for an attacker: a malformed
--- payload is refused before reaching any cooled operation. Identical (source, text) only --
--- two different refusals are two things the player has to be told.
+-- How long an identical (source, text) answer is suppressed. Two different refusals are two
+-- things the player has to be told, so only an exact repeat is swallowed.
 local ANSWER_DEDUPE_MS = 2000
 
 --- source -> answer text -> when it last went out. Emptied by `OPX.ForgetCooldowns`.
@@ -106,11 +100,8 @@ local function repeated(source, text)
   return false
 end
 
---- Routed through the server runtime's own `Open77.notifications`, which does nothing but
---- fire `open77:notifications:show` at the target. Whichever client resource registered that
---- name draws it -- `opx77_notify`, the official `open77_notifications`, or, if both are
---- running, both of them twice. Degrades to nothing when neither is installed: the core
---- declares no dependency on either, because a dependency is hard here.
+--- A toast, through `Open77.notifications`. Degrades to nothing when no resource draws
+--- `open77:notifications:show`; the core declares no dependency on one.
 ---@param source Source
 ---@param message string
 ---@param kind? "info"|"success"|"warning"|"error"
@@ -132,17 +123,27 @@ function OPX.Notify(source, message, kind, durationMs)
   })
 end
 
---- The same message, from a locale key.
+--- A code the catalogue can actually render. A storage layer answers `query-failed` and
+--- `no-database`, and a validator answers `too-short`: those are for a log, not a player.
+---@param code any
+---@return string
+function OPX.RefusalKey(code)
+  if type(code) == "string" and OPX.Locale.exists(code) then return code end
+  Open77.log.warn(("[core] %q has no catalogue entry; answering error.unavailable")
+    :format(tostring(code)))
+  return "error.unavailable"
+end
+
+--- The same message, from a locale key. A key with no entry is replaced rather than shown.
 ---@param source Source
 ---@param key string
 ---@param params? table<string, string|number>
 ---@param kind? "info"|"success"|"warning"|"error"
 function OPX.NotifyLocale(source, key, params, kind)
-  OPX.Notify(source, locale(key, params), kind)
+  OPX.Notify(source, locale(OPX.RefusalKey(key), params), kind)
 end
 
---- Answers a command the way the shipped resources do, so console and in-game output land
---- where a player already expects.
+--- Answers a command the way the shipped resources do.
 ---@param source Source|nil  nil or 0 prints to the console
 ---@param raw string|nil
 ---@param accepted boolean
@@ -155,9 +156,8 @@ function OPX.CommandResult(source, raw, accepted, message)
   end
 end
 
--- Per-source cooldowns. They belong to the OPERATION, not to a doorway onto it: anything
--- that can be driven in a loop is guarded where it is done, or the next entry point added
--- forgets. Not a security boundary -- the ownership checks in server/character.lua are.
+-- Per-source cooldowns, keyed by operation rather than by doorway. Not a security boundary:
+-- the ownership checks in server/character.lua are.
 local cooldowns = {}
 
 --- True when this source ran `key` less than `everyMs` ago. Records the attempt when not.
@@ -189,14 +189,21 @@ function OPX.ForgetCooldowns(source)
   lastAnswer[source] = nil
 end
 
---- Tells a client a request was refused, with a stable code and nothing else. The reason is
---- not sent: a refusal that explains itself tells an attacker which half of the guess was
---- right.
+--- Tells a client a request was refused: which request, and a code, and nothing else. A
+--- refusal that explains itself tells an attacker which half of the guess was right.
 ---@param source Source
----@param code string a locale key
-function OPX.Refuse(source, code)
+---@param code string a locale key; one the catalogue does not carry becomes
+---        `error.unavailable`, so this channel never sends a client a code it cannot render
+---@param operation? string a value of `OPX.Operations`. Without it a client waiting on one of
+---        several requests cannot tell which `error.tooFast` is its own
+function OPX.Refuse(source, code, operation)
   source = tonumber(source)
   if not source or source <= 0 then return end
-  if repeated(source, "refuse:" .. tostring(code)) then return end
-  TriggerClientEvent(OPX.Events.Client.NOTIFY, source, { kind = "error", code = code })
+  code = OPX.RefusalKey(code)
+  operation = type(operation) == "string" and operation or "unknown"
+  -- the operation is in the dedupe key: two requests refused for the same reason are two
+  -- answers, and collapsing them strands whichever client was not told
+  if repeated(source, "refuse:" .. operation .. ":" .. code) then return end
+  TriggerClientEvent(OPX.Events.Client.NOTIFY, source,
+    { kind = "error", code = code, operation = operation })
 end

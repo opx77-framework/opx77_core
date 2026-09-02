@@ -106,8 +106,11 @@ local function repeated(source, text)
   return false
 end
 
---- Routed through `open77_notifications`, degrading to nothing when that resource is absent:
---- the core declares no dependency on it, because a dependency is hard here.
+--- Routed through the server runtime's own `Open77.notifications`, which does nothing but
+--- fire `open77:notifications:show` at the target. Whichever client resource registered that
+--- name draws it -- `opx77_notify`, the official `open77_notifications`, or, if both are
+--- running, both of them twice. Degrades to nothing when neither is installed: the core
+--- declares no dependency on either, because a dependency is hard here.
 ---@param source Source
 ---@param message string
 ---@param kind? "info"|"success"|"warning"|"error"

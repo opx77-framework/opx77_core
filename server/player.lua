@@ -56,7 +56,9 @@ OPX.NormaliseEntity = normalise
 --- rather than on PlayerData, which keeps them out of the client payload and every column.
 ---@param entity table
 ---@param offline? boolean an offline Player has the same Functions, but sends and places
----        nothing
+---        nothing, and the money mutators refuse it: nothing writes a money column for a
+---        Player that is not in the roster, so a credit there would be announced and
+---        audited and then lost
 ---@return Player
 function OPX.CreatePlayer(entity, offline)
   local self = { Offline = offline == true }
@@ -68,7 +70,8 @@ function OPX.CreatePlayer(entity, offline)
 
   --- False until the world agrees with the stored row. A character whose placement failed is
   --- standing wherever the engine dropped them, and sampling that overwrites the very
-  --- position placement was trying to restore. `OPX.PlaceCharacter` is the only setter.
+  --- position placement was trying to restore. `OPX.PlaceCharacter` is the only setter to
+  --- true; `OPX.ForgetSession` clears it before an eviction save.
   self.MaySample = false
 
   self.PlayerData = normalise(entity)
@@ -207,27 +210,29 @@ end
 ---@param moneyType MoneyType
 ---@param amount number
 ---@param reason? string
----@return boolean ok
+---@return boolean ok, string? reason  a locale key naming which of the refusals it was
 function OPX.AddMoney(identifier, moneyType, amount, reason)
   local player = resolve(identifier)
-  if not player then return false end
+  if not player then return false, "error.notLoggedIn" end
+  if player.Offline then return false, "money.offline" end
   if not OPX.IsMoneyType(moneyType) then
     log.error(("AddMoney: %q is not a money type on this server"):format(tostring(moneyType)))
-    return false
+    return false, "money.badType"
   end
 
   local value = amountOf(amount)
   if not value then
     OPX.Logger.security("money.badAmount",
       ("AddMoney refused %s"):format(tostring(amount)),
-      { citizenId = player.PlayerData.citizenId, moneyType = moneyType })
-    return false
+      { citizenId = player.PlayerData.citizenId, moneyType = moneyType },
+      player.PlayerData.source)
+    return false, "money.badAmount"
   end
 
   if not OPX.Hooks.trigger("money:beforeAdd", {
     player = player, moneyType = moneyType, amount = value, reason = reason,
   }) then
-    return false
+    return false, "money.vetoed"
   end
 
   local money = player.PlayerData.money
@@ -242,32 +247,34 @@ end
 ---@param moneyType MoneyType
 ---@param amount number
 ---@param reason? string
----@return boolean ok
+---@return boolean ok, string? reason  a locale key naming which of the refusals it was
 function OPX.RemoveMoney(identifier, moneyType, amount, reason)
   local player = resolve(identifier)
-  if not player then return false end
+  if not player then return false, "error.notLoggedIn" end
+  if player.Offline then return false, "money.offline" end
   if not OPX.IsMoneyType(moneyType) then
     log.error(("RemoveMoney: %q is not a money type on this server"):format(tostring(moneyType)))
-    return false
+    return false, "money.badType"
   end
 
   local value = amountOf(amount)
   if not value then
     OPX.Logger.security("money.badAmount",
       ("RemoveMoney refused %s"):format(tostring(amount)),
-      { citizenId = player.PlayerData.citizenId, moneyType = moneyType })
-    return false
+      { citizenId = player.PlayerData.citizenId, moneyType = moneyType },
+      player.PlayerData.source)
+    return false, "money.badAmount"
   end
 
   local money = player.PlayerData.money
   if money[moneyType] - value < 0 and not Config.MONEY.ALLOW_NEGATIVE[moneyType] then
-    return false
+    return false, "money.insufficient"
   end
 
   if not OPX.Hooks.trigger("money:beforeRemove", {
     player = player, moneyType = moneyType, amount = value, reason = reason,
   }) then
-    return false
+    return false, "money.vetoed"
   end
 
   money[moneyType] = money[moneyType] - value
@@ -281,21 +288,24 @@ end
 ---@param moneyType MoneyType
 ---@param amount number
 ---@param reason? string
----@return boolean ok
+---@return boolean ok, string? reason  a locale key naming which of the refusals it was
 function OPX.SetMoney(identifier, moneyType, amount, reason)
   local player = resolve(identifier)
-  if not player then return false end
-  if not OPX.IsMoneyType(moneyType) then return false end
+  if not player then return false, "error.notLoggedIn" end
+  if player.Offline then return false, "money.offline" end
+  if not OPX.IsMoneyType(moneyType) then return false, "money.badType" end
 
   local n = tonumber(amount)
-  if not OPX.Math.isFinite(n) then return false end
+  if not OPX.Math.isFinite(n) then return false, "money.badAmount" end
   n = math.floor(n + 0.5)
-  if n < 0 and not Config.MONEY.ALLOW_NEGATIVE[moneyType] then return false end
+  if n < 0 and not Config.MONEY.ALLOW_NEGATIVE[moneyType] then
+    return false, "money.negative"
+  end
 
   if not OPX.Hooks.trigger("money:beforeSet", {
     player = player, moneyType = moneyType, amount = n, reason = reason,
   }) then
-    return false
+    return false, "money.vetoed"
   end
 
   player.PlayerData.money[moneyType] = n
@@ -343,6 +353,8 @@ function OPX.SamplePosition(player)
   local data = player.PlayerData
   if not data.source then return false end
   if not player.MaySample then return false end
+  -- the id may have been recycled: another account's coordinates must never land in this row
+  if OPX.UserIdOf(data.source) ~= data.userId then return false end
 
   local snapshot = Open77.players.position(data.source)
   if type(snapshot) ~= "table" or snapshot.x == nil then return false end
@@ -378,7 +390,7 @@ function OPX.Login(source, citizenId)
   if entity.userId ~= session.userId then
     OPX.Logger.security("character.notYours",
       ("player %d asked for %s"):format(source, citizenId),
-      { userId = session.userId, owner = entity.userId })
+      { userId = session.userId, owner = entity.userId }, source)
     -- the same code a missing character gets: "somebody else's" is an existence oracle
     return Result.err("character.notFound", citizenId)
   end
@@ -400,9 +412,22 @@ function OPX.Login(source, citizenId)
   OPX.RegisterPlayer(player)
   session.citizenId = citizenId
 
-  -- a local event the host fans into open77_appearance's VM; the only channel there is
-  TriggerEvent("open77:appearance:setCharacter", source, citizenId)
-
+  -- There used to be a `TriggerEvent("open77:appearance:setCharacter", source, citizenId)`
+  -- here, on the belief that the host fanned that name into open77_appearance's VM. It does
+  -- not: a server-side `TriggerEvent` walks the handler table of its own VM and nothing else,
+  -- the host fans only its own closed set of names (`onPlayerConnected`, `onPlayerDisconnected`,
+  -- `onPlayerReady`, `onResourceStart`/`Stop`, `onTunableChanged`, the NPC events), and the
+  -- string `open77:appearance:setCharacter` appears in no shipped assembly. The call reached
+  -- nothing and did not fail either -- it did nothing, silently -- so it is gone rather than
+  -- rewritten. See docs/unknowns.md, "RÉFUTÉ : `TriggerEvent` ne franchit pas les VM serveur".
+  --
+  -- Nothing is lost by dropping it. The citizen id *is* the appearance service's character
+  -- key, and the wire event on the next line carries it to the owning client inside
+  -- `PlayerData.citizenId`; the core's client half then re-emits it as
+  -- `OPX.Events.Local.PLAYER_LOADED` on the client-local bus, which unlike the server's is
+  -- host-wide. An appearance resource that wants to follow the live character listens there,
+  -- with a bare `AddEventHandler` and no permission. That is the only channel that can work
+  -- from here, and it is already open.
   TriggerClientEvent(OPX.Events.Client.PLAYER_LOADED, source, player.PlayerData)
   TriggerEvent(OPX.Events.Internal.PLAYER_LOADED, source, player.PlayerData)
 

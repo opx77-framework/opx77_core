@@ -33,6 +33,12 @@ OPX.Config.SHARED = {
     HEADING = 0.0,
   },
 
-  -- "top" | "top-right" | "top-left" | "bottom" | "bottom-right" | "bottom-left"
-  NOTIFY_POSITION = "top-right",
+  -- open77_notifications vocabulary, underscores rather than hyphens:
+  --   "middle_left" (the service default) | "top_left" | "top_center" | "top_right"
+  --   | "bottom_left" | "bottom_center" | "bottom_right"
+  -- Anything else is not a documented value. The core warns about an unknown one and still
+  -- sends it: the accepted set is known only from the website, the server binary validates
+  -- `position` not at all, and open77_notifications is a client resource we cannot read --
+  -- so a whitelist that guessed wrong would silently swallow every toast the core sends.
+  NOTIFY_POSITION = "top_right",
 }

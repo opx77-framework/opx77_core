@@ -35,7 +35,14 @@ appelleraient, est impossible. Open2077 a d'ailleurs abandonné son propre
 `open77_gamemode` pour cette raison, et distribue les motifs communs par
 génération de code plutôt que par liaison à l'exécution.
 
-**Côté client, c'est l'inverse** : les exports existent.
+**Côté client, c'est l'inverse** : les exports existent, et le bus local
+d'événements y est à l'échelle de l'hôte — `open77_zones` déclenche un nom
+fourni par l'appelant et `pursuit`, une autre ressource, le reçoit avec un
+`AddEventHandler` nu. C'est pour cela que le core publie ses changements d'état
+sur deux canaux (`OPX.Events.Client` sur le fil, `OPX.Events.Local` en local)
+et que les deux vocabulaires sont disjoints : le répartiteur compare les noms
+sans regarder le drapeau réseau, donc réémettre un nom de fil depuis son propre
+gestionnaire crée une boucle silencieuse cadencée au tick.
 
 ```lua
 exports("openMenu", function(id) return { opened = true, id = id } end)
@@ -103,23 +110,35 @@ jamais de la charge utile du client.
 > readiness gate has opened. »
 
 ```lua
-Open77.ready.participate({ timeoutMs = 30000, reason = "character_creation" })
-local session, failure = Open77.ready.hold(playerId, "character_creation")
+Open77.ready.participate({ livenessIntervalMs = 30000, reason = "character_creation" })
+local session = Open77.ready.hold(playerId, "character_creation") -- ou nil, raison
 Open77.ready.release(playerId, session)
 ```
 
 `participate` pose automatiquement un verrou sur chaque joueur qui se connecte
 ensuite. Le numéro de session évite les confusions quand les `playerId` sont
-recyclés.
+recyclés. **`hold` rend une seule valeur** — la session — ou `nil, raison` ;
+le commentaire du bootstrap qui annonce `ok, session` est faux, voir
+`docs/unknowns.md`.
 
-Si un verrou n'est jamais relâché, la plateforme ouvre la barrière au bout du
-délai et émet `timeout:<resource>` — potentiellement avec le joueur encore dans
-une fenêtre modale et **sans pantin du tout**. Il faut donc vérifier l'état de
-vie avant tout placement.
+`livenessIntervalMs` (`timeoutMs` est le même champ, ancien nom) n'est **pas**
+une limite imposée au joueur : c'est un chien de garde sur la ressource qui
+détient le verrou. Un joueur peut passer une heure dans un créateur de
+personnage, tant que le détenteur rappelle `hold` pour rafraîchir l'échéance.
+La barrière ne s'ouvre de force que sur la preuve que le détenteur a disparu,
+et le détail vaut alors `liveness_lost:<ressource>`.
+
+**Un verrou `__platform` s'ajoute au tien** sur chaque joueur, sans échéance,
+et aucun Lua ne peut le prendre ni le relâcher. Il ne tombe que lorsque le
+client a annoncé `open77:session:gameplayReady` — ce qu'émet
+`open77_appearance` — avec le détail `incarnated`. Sans une ressource qui
+l'émette, la barrière de chaque joueur reste fermée pour toujours.
 
 `onPlayerReady(playerId, detail)` est émis dans toutes les ressources quand le
-dernier verrou tombe. `detail` vaut `cleared`, `no_holds`, `resource_reloaded`,
-`resource_stopped` ou `timeout:<resource>`.
+dernier verrou tombe. `detail` vaut la `note` passée à `release`, `cleared`,
+`incarnated`, `resource_stopped`, `resource_reloaded` ou
+`liveness_lost:<ressource>[,<ressource>…]`. **`no_holds` et `timeout:`
+n'existent dans aucune assembly livrée**, malgré ce qu'annonce le site.
 
 ## Base de données
 
@@ -179,9 +198,13 @@ Console : `acl.reload`, `acl.list`, `acl.check <playerId> <permission>`.
 Relevé le 2026-08-31 sur `open77-server-2.31.4+op77.11`. Le code livré
 contredit la doc sur plusieurs points, et c'est lui qui fait foi.
 
-- **Il existe deux événements de déconnexion**, ni l'un ni l'autre documenté :
-  `onPlayerDisconnected(playerIdStr)` et `playerDropped()`. Le core écoute les
-  deux. Détail dans `docs/unknowns.md`.
+- **Il n'existe qu'un seul événement de déconnexion**, non documenté :
+  `onPlayerDisconnected(playerId)`. Les ressources officielles écoutent aussi
+  `playerDropped()`, mais **ce nom n'est émis par rien** — il n'apparaît dans
+  aucune assembly hors du littéral du bootstrap. Ces gestionnaires-là sont du
+  code mort, y compris le nôtre. Détail dans `docs/unknowns.md`.
+- **`Open77.state.save/load/clear` existe** et conserve un état autoritaire à
+  travers un reload. Absent de la page `server-api.md` qui se dit complète.
 - **`server_script` prend une entrée par ligne**, et les globs sont à
   proscrire : un glob vide empêche la ressource entière de démarrer. Toutes
   les ressources livrées listent leurs fichiers un par ligne.
@@ -197,10 +220,19 @@ contredit la doc sur plusieurs points, et c'est lui qui fait foi.
 
 ## Ce qui reste à vérifier
 
-- Qu'un nom d'événement arbitraire émis par une ressource serveur atteigne une
-  autre ressource. Seuls les noms d'intégration connus de l'hôte sont
-  démontrés (`open77:appearance:setCharacter`).
 - Les limites chiffrées du codec d'exports : taille d'argument, profondeur,
-  délai d'expiration d'un appel.
-- L'unité rendue par `Open77.time.monotonic()` côté serveur : la doc dit des
-  millisecondes, `open77_playerstate` la traite comme des secondes.
+  délai d'expiration d'un appel. Notamment si une table indexée à partir de
+  `0` traverse le codec telle quelle — le core ne le suppose pas et réémet
+  les grades en tableau 1-based portant un `level` explicite.
+
+## Ce qui est tranché depuis
+
+- **Un nom d'événement arbitraire n'atteint pas une autre ressource côté
+  serveur.** `TriggerEvent` reste dans sa VM ; la diffusion vers toutes les
+  ressources est réservée à l'ensemble fermé des événements de l'hôte.
+  `open77:appearance:setCharacter` n'est donc éventé par personne. **Côté
+  client, c'est l'inverse** : le bus local y est à l'échelle de l'hôte, et les
+  ressources officielles s'en servent.
+- **`Open77.time.monotonic()` rend des secondes** dans les deux runtimes : le
+  bootstrap le définit comme l'horloge millisecondes divisée par 1000, et la
+  référence d'API dit la même chose. `open77_playerstate` avait raison.

@@ -42,12 +42,15 @@ OPX.Config.SERVER = {
   },
 
   ENTRY = {
-    -- how long the core holds the readiness gate for a joining player, in ms. This is what is
-    -- declared to `Open77.ready.participate`; at the deadline the host opens the gate itself.
+    -- the liveness interval declared to `Open77.ready.participate`, in ms, and NOT a budget
+    -- for the player: it is how long the host will wait for a sign of life from THIS RESOURCE
+    -- before deciding the holder is gone and opening the gate with `liveness_lost:opx77_core`.
+    -- The host clamps it to [1000, 600000]. A hold is refreshed by taking it again; the core
+    -- takes one per join and never refreshes it, so this is in practice the deadline it has.
     GATE_MS = 300000,
 
     -- the core's own deadline for the whole join sequence, in ms. Below GATE_MS so the core
-    -- gives up first and can say why.
+    -- gives up first and can say why. Also the ceiling of the SELECTION_MS tunable.
     PIPELINE_MS = 240000,
   },
 

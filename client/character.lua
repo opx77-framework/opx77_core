@@ -1,12 +1,16 @@
 --- Character selection, client side. This file does not open the character creator:
 --- open77_appearance owns that bootstrap transaction and it can only be resolved once. The
 --- core decides which character is live -- the citizen id is the `character_key` -- and the
---- appearance events below are re-emitted, not handled.
+--- appearance events below are re-emitted onto the core's local channel
+--- (`OPX.Events.Local`), not handled. Their names differ from the `open77:appearance:*`
+--- names that triggered them, so re-emitting cannot re-enter the handler that fired it.
 
 local log = OPX.Log.scope("character")
 
 --- Asks the server to enter the world as `citizenId`. Returns as soon as the request is sent;
---- the answer is `opx77:client:playerLoaded` or a refusal on `opx77:client:notify`.
+--- the answer arrives on the wire as `opx77:client:playerLoaded`, or a refusal as
+--- `opx77:client:notify`. This file hears those; a satellite hears the local re-emissions
+--- `OPX.Events.Local.PLAYER_LOADED` and `.REFUSED` instead, which need no permission.
 ---@param citizenId CitizenId
 ---@return boolean sent, string? reason
 function OPX.SelectCharacter(citizenId)
@@ -56,11 +60,11 @@ end
 --- run. Re-emitted so a selection UI can step out of the way first.
 RegisterNetEvent("open77:appearance:createRequired", function(nonce, characterKey)
   log.info(("appearance wants a creator run for %s"):format(tostring(characterKey)))
-  TriggerEvent("opx77:client:appearanceRequired", characterKey, nonce)
+  TriggerEvent(OPX.Events.Local.APPEARANCE_REQUIRED, characterKey, nonce)
 end)
 
 --- The live character's look changed, which is what a successful `setCharacter` looks like.
 RegisterNetEvent("open77:appearance:characterChanged", function(characterKey)
   log.debug(("appearance switched to %s"):format(tostring(characterKey)))
-  TriggerEvent("opx77:client:appearanceChanged", characterKey)
+  TriggerEvent(OPX.Events.Local.APPEARANCE_CHANGED, characterKey)
 end)

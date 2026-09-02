@@ -14,6 +14,19 @@ OPX.IsClient = rawget(_G, "TriggerServerEvent") ~= nil
 OPX.Config = OPX.Config or {}
 
 --- Event names, in one place. Naming is `opx77:<side>:<subject>`.
+---
+--- A satellite has TWO ways to hear the core, and they are different channels with
+--- different requirements. `Client` is the networked one: the server sends it, so a listener
+--- must hold `network.events` and register with `RegisterNetEvent`. `Local` is fired by the
+--- core's own client half right after it has updated its mirror; a listener registers with a
+--- plain `AddEventHandler` and needs no permission at all. Both are public and supported.
+---
+--- No name appears in both tables. On this platform a `TriggerEvent` also reaches
+--- `RegisterNetEvent` handlers of the same name -- the dispatcher matches on the name and
+--- never looks at the network flag -- so a local re-emission that reused its own wire name
+--- would re-enter the handler that fired it. It is tick-paced rather than recursive, which
+--- makes it a silent permanent busy loop instead of a stack overflow: nothing crashes and
+--- nothing is logged. Keeping the two vocabularies disjoint is what prevents it.
 OPX.Events = {
   --- Owned by Open2077, not by us; listed so there is one place to update if they move.
   Platform = {
@@ -45,6 +58,26 @@ OPX.Events = {
     REPORT_POSITION = "opx77:server:reportPosition",
     SPAWN_VEHICLE = "opx77:server:spawnVehicle",
     STORE_VEHICLE = "opx77:server:storeVehicle",
+  },
+
+  --- Fired by the core's client half with `TriggerEvent`, after the mirrored state has
+  --- already been updated -- so a handler can read `OPX.GetPlayerData()` and see the change
+  --- that woke it. Heard with a plain `AddEventHandler`, from any resource: the CLIENT local
+  --- event bus is host-wide, which the platform's own resources rely on (open77_zones fires a
+  --- caller-supplied event name and pursuit receives it with a bare `AddEventHandler`).
+  --- This is the channel a satellite should prefer; `Client` below is for one that would
+  --- rather take the wire itself.
+  Local = {
+    CHARACTERS_READY = "opx77:client:charactersReady",
+    PLAYER_LOADED = "opx77:client:onPlayerLoaded",
+    PLAYER_UNLOADED = "opx77:client:onPlayerUnloaded",
+    PLAYER_DATA_CHANGED = "opx77:client:playerDataChanged",
+    MONEY_CHANGED = "opx77:client:moneyChanged",
+    JOB_CHANGED = "opx77:client:jobChanged",
+    GANG_CHANGED = "opx77:client:gangChanged",
+    REFUSED = "opx77:client:refused",
+    APPEARANCE_REQUIRED = "opx77:client:appearanceRequired",
+    APPEARANCE_CHANGED = "opx77:client:appearanceChanged",
   },
 
   --- Resource-local, between core files. These never cross the wire.

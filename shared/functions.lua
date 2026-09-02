@@ -96,6 +96,24 @@ function OPX.IsMoneyType(moneyType)
   return OPX.Config.SHARED.MONEY.TYPES[moneyType] ~= nil
 end
 
+--- The positions open77_notifications documents. A set rather than a list because the only
+--- thing anyone asks is whether a value is in it.
+OPX.NOTIFY_POSITIONS = {
+  middle_left = true,
+  top_left = true, top_center = true, top_right = true,
+  bottom_left = true, bottom_center = true, bottom_right = true,
+}
+
+--- True when `position` is one of the documented notification positions. Advisory only: the
+--- server binary forwards `position` to open77_notifications without validating it, and that
+--- resource is not on disk, so a caller warns on false rather than dropping the toast. A
+--- whitelist that guessed the set wrong would swallow every notification silently.
+---@param position any
+---@return boolean
+function OPX.IsNotifyPosition(position)
+  return OPX.NOTIFY_POSITIONS[position] == true
+end
+
 --- Formats an amount for display: "12 500 €$".
 ---@param amount number
 ---@param moneyType? MoneyType anything but EDDIES is shown with its own name
@@ -110,13 +128,25 @@ end
 
 local gameTimer
 
---- Process-monotonic milliseconds. `Open77.time.monotonic()` is the same clock in SECONDS.
+--- Process-monotonic milliseconds. `Open77.time.monotonic()` is the same clock in SECONDS
+--- -- the API reference and the host's own Lua bootstrap agree on that, the bootstrap
+--- defining `monotonic` as the millisecond scheduler clock divided by 1000.
+---
+--- `GetGameTimer` is installed by the bootstrap in every server VM, so the fallback below is
+--- not expected to run. It still multiplies `monotonic` back up rather than returning a
+--- constant: a zero here would make every cooldown in the framework compare two equal
+--- numbers for ever, which reads as "the cooldown never elapses" and is invisible.
 ---@return integer
 function OPX.Now()
   -- resolved on first use, not at load: during boot the global may not be installed yet
   if gameTimer then return gameTimer() end
   local timer = rawget(_G, "GetGameTimer")
-  if not timer then return 0 end
+  if not timer then
+    local monotonic = Open77 and Open77.time and Open77.time.monotonic
+    local seconds = monotonic and monotonic()
+    if type(seconds) ~= "number" then return 0 end
+    return math.floor(seconds * 1000)
+  end
   gameTimer = timer
   return timer()
 end

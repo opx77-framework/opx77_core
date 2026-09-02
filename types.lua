@@ -112,9 +112,9 @@
 ---@field SetMetaData fun(key: string, value: any)
 ---@field GetMetaData fun(key?: string): any
 ---@field SetCharInfo fun(key: string, value: any)
----@field AddMoney fun(moneyType: MoneyType, amount: number, reason?: string): boolean
----@field RemoveMoney fun(moneyType: MoneyType, amount: number, reason?: string): boolean
----@field SetMoney fun(moneyType: MoneyType, amount: number, reason?: string): boolean
+---@field AddMoney fun(moneyType: MoneyType, amount: number, reason?: string): boolean, string?
+---@field RemoveMoney fun(moneyType: MoneyType, amount: number, reason?: string): boolean, string?
+---@field SetMoney fun(moneyType: MoneyType, amount: number, reason?: string): boolean, string?
 ---@field GetMoney fun(moneyType?: MoneyType): integer|table
 ---@field SetJob fun(name: string, grade: integer): Result
 ---@field SetGang fun(name: string, grade: integer): Result

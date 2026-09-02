@@ -13,11 +13,24 @@ local log = OPX.Log.scope("needs")
 --- need that emptied it directly would fight whatever else is writing to it.
 local NEEDS = { "hunger", "thirst" }
 
+--- The same predicate as `finite` elsewhere in this framework, coercing first and answering
+--- with the number: anything `tonumber` accepts, so long as it is neither NaN nor either
+--- infinity. It carries no range of its own -- a caller that needs one applies it to the
+--- answer -- so that "finite" means exactly one thing everywhere and a bound stays visible
+--- where it bites.
+---
+--- It used to stop at NaN, which left a helper called "finite" accepting both infinities. That
+--- was not academic here: a `metadata.health` of `math.huge` passed the `health > 0` test
+--- below and `SetMetaData` wrote `math.huge` straight back into the character, where the
+--- autosave then has to JSON-encode it.
 ---@param value any
 ---@return number|nil
-local function finite(value)
+local function finiteNumber(value)
   value = tonumber(value)
-  if value == nil or value ~= value then return nil end
+  -- `value ~= value` is the NaN check, not a typo: NaN is the one value unequal to itself
+  if value == nil or value ~= value or value == math.huge or value == -math.huge then
+    return nil
+  end
   return value
 end
 
@@ -38,7 +51,7 @@ local function tick()
 
     for position = 1, #NEEDS do
       local need = NEEDS[position]
-      local held = finite(metadata[need])
+      local held = finiteNumber(metadata[need])
       local rule = Config[need]
       if held ~= nil and type(rule) == "table" then
         -- not `next`: that is the global `pairs` is built on, and shadowing it here would
@@ -50,7 +63,7 @@ local function tick()
     end
 
     if emptied > 0 and Config.DAMAGE_AT_ZERO > 0 then
-      local health = finite(metadata.health)
+      local health = finiteNumber(metadata.health)
       if health ~= nil and health > 0 then
         player.Functions.SetMetaData("health",
           math.max(0, health - Config.DAMAGE_AT_ZERO * emptied))

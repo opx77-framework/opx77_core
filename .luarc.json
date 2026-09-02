@@ -9,6 +9,7 @@
   "workspace.checkThirdParty": false,
   "diagnostics.globals": [
     "OPX",
+    "OPX_VEHICLES",
     "locale",
     "Open77",
     "MySQL",

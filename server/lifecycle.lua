@@ -1,6 +1,17 @@
 --- The join-time readiness gate: nothing may teleport, spawn, kill or respawn a player until
---- it opens. The core's own deadline sits below the host's `GATE_MS`, so it gives up first
---- and can say why rather than being timed out with the player holding no puppet.
+--- it opens.
+---
+--- `GATE_MS` is NOT a budget for the player. It is the liveness interval the host watches this
+--- resource on, clamped by the host to [1000, 600000] ms, and `hold` is what refreshes it. A
+--- hold stands indefinitely for as long as it is refreshed -- somebody may spend an hour in a
+--- character creator and that is correct -- and is only ever broken by evidence the holder is
+--- gone: the resource died, was reloaded away, or the client it was waiting on stopped
+--- answering. The gate then opens by itself and the detail reads `liveness_lost:opx77_core`.
+---
+--- This core takes its hold once per join and never heartbeats, so in practice the interval
+--- IS the deadline it has. `SELECTION_MS` -- the core's own limit on the selection screen --
+--- is therefore capped below `GATE_MS` in server/tunables.lua, so the core always gives up
+--- first and can say why rather than being declared dead with the player holding no puppet.
 
 local log = OPX.Log.scope("lifecycle")
 local Config = OPX.Config.SERVER
@@ -22,10 +33,30 @@ function Lifecycle.participate()
     return
   end
   Open77.ready.participate({
-    timeoutMs = Config.ENTRY.GATE_MS,
+    livenessIntervalMs = Config.ENTRY.GATE_MS,
     reason = "opx77_character_selection",
   })
-  log.info(("holding the readiness gate for up to %d ms per join"):format(Config.ENTRY.GATE_MS))
+  log.info(("declaring a %d ms liveness interval on the readiness gate")
+    :format(Config.ENTRY.GATE_MS))
+
+  -- Every joiner also arrives held by `__platform`, a hold no Lua may take or release and
+  -- which has no deadline at all. It clears on one thing only: the client announcing
+  -- `open77:session:gameplayReady`, which an appearance resource emits once it has seen that
+  -- the local puppet is attached, alive and past the "press any key to continue" screen.
+  -- Nothing on this server emits it, so on this build the gate never opens for anybody:
+  -- `Open77.ready.isReady` stays false forever and `onPlayerReady` never fires. Said out loud
+  -- because it is otherwise undiagnosable -- the core still loads and places characters, since
+  -- it neither reads `isReady` nor waits on that event, but anything that does will hang.
+  local appearance = GetResourceState("open77_appearance")
+  if appearance ~= "running" and appearance ~= "starting" then
+    log.warn("no resource here emits `open77:session:gameplayReady`")
+    log.warn("  so the platform's own `__platform` hold never clears: the readiness gate")
+    log.warn("  never opens, `Open77.ready.isReady` is permanently false and the")
+    log.warn("  `onPlayerReady` handler in server/events.lua can never fire. The core is")
+    log.warn("  unaffected -- it reads neither -- but do not build on either of them. Once")
+    log.warn("  our own hold is released the host starts warning: one WRN naming __platform")
+    log.warn("  per connected player, every 60 seconds, for the whole session.")
+  end
 end
 
 --- Takes the hold for one player and remembers the session number, which is what keeps a
@@ -55,7 +86,9 @@ function Lifecycle.release(source, note)
 
   local gateSession = session and session.gateSession
   if gateSession == nil then
-    -- ask the host rather than skip: an unreleased hold stalls that player until GATE_MS
+    -- ask the host rather than skip: a hold nobody releases is not on a clock, so it stalls
+    -- that player until the host decides this resource has stopped answering -- which, on a
+    -- core that is still running, is never
     local status = Open77.ready.status(source)
     gateSession = status and status.session or nil
   end

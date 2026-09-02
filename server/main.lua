@@ -74,11 +74,18 @@ function OPX.EnsureSession(playerId)
   return session
 end
 
---- Drops a session and, with it, any player still attached to the slot.
+--- Drops a session and, with it, any player still attached to the slot. The character is
+--- logged out rather than dropped: this is the net for a departure nobody reported, and
+--- what is in the roster has not been written since the last autosave.
 ---@param playerId Source
 function OPX.ForgetSession(playerId)
   local player = OPX.Players[playerId]
-  if player then OPX.UnregisterPlayer(player) end
+  if player then
+    -- the slot may already belong to somebody else, and the save samples by source:
+    -- sampling now would write their position onto this character's row
+    player.MaySample = false
+    OPX.Logout(playerId)
+  end
   OPX.Sessions[playerId] = nil
 end
 
@@ -86,6 +93,11 @@ end
 ---@param player Player
 function OPX.RegisterPlayer(player)
   local data = player.PlayerData
+  -- a slot already holding somebody else means a second login raced this one: take the old
+  -- entry out of both indexes first, or byCitizenId keeps a row pointing at a character
+  -- nobody holds
+  local occupant = OPX.Players[data.source]
+  if occupant and occupant ~= player then OPX.UnregisterPlayer(occupant) end
   OPX.Players[data.source] = player
   OPX.PlayerRegistry.byCitizenId[data.citizenId] = data.source
   OPX.PlayerRegistry.byUserId[data.userId] = data.source

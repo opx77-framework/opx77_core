@@ -1,6 +1,7 @@
 --- Commands. The third argument to `RegisterCommand` is `restricted`, which gates it on the
 --- ACL permission `command.<name>`; the unrestricted ones are the handful a player runs on
---- their own character.
+--- their own character. Unrestricted means reachable from any client, so an unrestricted
+--- command that spawns a thread takes a doorway cooldown first -- see `tooFast` below.
 
 local Config = OPX.Config.SERVER
 
@@ -26,6 +27,34 @@ local function targetOf(argument, fallbackSource)
   local asId = tonumber(argument)
   if asId then return OPX.GetPlayer(asId) end
   return OPX.GetPlayerByCitizenId(tostring(argument):upper())
+end
+
+--- The doorway guard for an UNRESTRICTED command that answers on its own thread.
+---
+--- A command is not a console-only affair: `restricted` is the third argument to
+--- `RegisterCommand` and it decides one thing, whether the dedicated console (source 0) may
+--- run a command the ACL would otherwise refuse. Everything registered with `false` here is
+--- reachable from any connected client, typed into the Open77 terminal or sent as a slash
+--- command, with no permission and no host-side rate limit on the dispatch. So the commands
+--- below are a second doorway onto the operations `server/events.lua` guards on the wire, and
+--- a modified client that spams `/opx77.select` spends the resource's 1 024-task budget just
+--- as fast as one spamming the net event would. The restricted commands need no guard: the
+--- ACL is the limit there.
+---
+--- The key is deliberately the SAME `<operation>.request` key the wire doorway takes, so the
+--- two entry points share one window rather than each granting a fresh one -- and it is
+--- deliberately NOT the operation's own key from server/character.lua, because `OPX.Cooling`
+--- records the attempt it allows and a doorway on that key would make the operation refuse
+--- itself. Console callers pass source 0, for which `OPX.Cooling` is always false.
+---@param source Source
+---@param raw string
+---@param key string
+---@param everyMs integer
+---@return boolean refused true when the caller has already been answered
+local function tooFast(source, raw, key, everyMs)
+  if not OPX.Cooling(source, key, everyMs) then return false end
+  OPX.CommandResult(source, raw, false, locale("error.tooFast"))
+  return true
 end
 
 RegisterCommand("opx77", function(source, _, raw)
@@ -119,6 +148,7 @@ RegisterCommand("opx77.characters", function(source, _, raw)
   if source <= 0 then
     return OPX.CommandResult(source, raw, false, "opx77.characters must be run in game")
   end
+  if tooFast(source, raw, "ready", 2000) then return end
   CreateThread(function()
     local sent = OPX.SendCharacters(source)
     if not sent.ok then
@@ -138,6 +168,7 @@ RegisterCommand("opx77.select", function(source, args, raw)
   if source <= 0 or not args[1] then
     return OPX.CommandResult(source, raw, false, "usage: opx77.select <citizenId>")
   end
+  if tooFast(source, raw, "select.request", 1000) then return end
   CreateThread(function()
     local selected = OPX.SelectCharacter(source, args[1])
     OPX.CommandResult(source, raw, selected.ok,
@@ -151,6 +182,7 @@ RegisterCommand("opx77.create", function(source, args, raw)
     return OPX.CommandResult(source, raw, false,
       "usage: opx77.create <firstName> <lastName> [nomad|streetkid|corpo] [female|male]")
   end
+  if tooFast(source, raw, "create.request", 1000) then return end
   CreateThread(function()
     local created = OPX.CreateCharacter(source, {
       firstName = args[1],
@@ -170,6 +202,7 @@ RegisterCommand("opx77.delete", function(source, args, raw)
   if source <= 0 or not args[1] then
     return OPX.CommandResult(source, raw, false, "usage: opx77.delete <citizenId>")
   end
+  if tooFast(source, raw, "delete.request", 1000) then return end
   CreateThread(function()
     local deleted = OPX.DeleteCharacter(source, args[1])
     OPX.CommandResult(source, raw, deleted.ok,
@@ -189,7 +222,7 @@ RegisterCommand("opx77.duty", function(source, _, raw)
     local toggled = OPX.SetJobDuty(player, not player.PlayerData.job.onDuty)
     OPX.CommandResult(source, raw, toggled.ok,
       toggled.ok and (toggled.value and locale("job.onDuty") or locale("job.offDuty"))
-        or tostring(toggled.error))
+        or locale(toggled.error))
   end)
 end, false)
 
@@ -205,17 +238,20 @@ RegisterCommand("opx77.money", function(source, args, raw)
   local reason = ("staff command by %s"):format(tostring(source))
 
   -- an if/else: in `a >= 0 and Add() or Remove()` a false from Add runs Remove as well
-  local ok
+  local ok, why
   if amount >= 0 then
-    ok = OPX.AddMoney(target, moneyType, amount, reason)
+    ok, why = OPX.AddMoney(target, moneyType, amount, reason)
   else
-    ok = OPX.RemoveMoney(target, moneyType, -amount, reason)
+    ok, why = OPX.RemoveMoney(target, moneyType, -amount, reason)
   end
 
+  -- the mutators name which refusal it was, so this no longer has to read out the or-list
   OPX.CommandResult(source, raw, ok, ok
     and ("%s now holds %s"):format(target.PlayerData.citizenId,
       OPX.FormatMoney(target.PlayerData.money[moneyType] or 0, moneyType))
-    or "refused: unknown money type, bad amount, or insufficient balance")
+    -- `money.insufficient` carries a {type} placeholder; the others do not, and a spare
+    -- parameter is ignored, so one params table covers every code the mutators can return
+    or locale(why or "error.badRequest", { type = moneyType }))
 end, true)
 
 RegisterCommand("opx77.job", function(source, args, raw)

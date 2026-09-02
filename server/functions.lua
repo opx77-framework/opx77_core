@@ -27,7 +27,8 @@ function OPX.GetPlayerByUserId(userId)
 end
 
 --- Every loaded character. Iterate this rather than `pairs(OPX.Players)`: the walk also
---- evicts any slot whose userId no longer matches, through `OPX.Logout`, which saves.
+--- evicts any slot whose userId no longer matches, through `OPX.ForgetSession`, which logs
+--- the character out, which saves.
 ---@return Player[]
 function OPX.GetPlayers()
   local out, n = {}, 0
@@ -46,7 +47,8 @@ function OPX.GetPlayers()
   end
 
   for i = 1, staleCount do
-    OPX.Logout(stale[i])
+    -- ForgetSession clears MaySample before logging out, so the eviction save cannot write
+    -- the new occupant of a recycled slot into the departed character's row
     OPX.ForgetSession(stale[i])
   end
   return out

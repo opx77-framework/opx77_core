@@ -23,20 +23,39 @@ function OPX.GetGangData()
   return OPX.PlayerData.gang
 end
 
+--- `minGrade` is the THIRD parameter, not the second, so every call written against the
+--- two-argument form keeps the meaning it had: a caller who passed a grade where
+--- `onDutyOnly` lives was getting a silent true at grade 0, and moving the parameter
+--- would have turned that into a silent false instead.
 ---@param name string
 ---@param onDutyOnly? boolean
+---@param minGrade? integer when given, the held grade level must be >= this
 ---@return boolean
-function OPX.HasJob(name, onDutyOnly)
+function OPX.HasJob(name, onDutyOnly, minGrade)
   local job = OPX.PlayerData.job
   if not job or job.name ~= name then return false end
-  return not onDutyOnly or job.onDuty == true
+  if onDutyOnly and job.onDuty ~= true then return false end
+  if minGrade ~= nil then
+    local level = job.grade and job.grade.level
+    if type(level) ~= "number" or level < minGrade then return false end
+  end
+  return true
 end
 
+--- Same grade check as OPX.HasJob, and for the same reason it is appended rather than
+--- inserted. There is no duty parameter because a gang has no shifts: duty is a property
+--- of the primary job only.
 ---@param name string
+---@param minGrade? integer when given, the held grade level must be >= this
 ---@return boolean
-function OPX.HasGang(name)
+function OPX.HasGang(name, minGrade)
   local gang = OPX.PlayerData.gang
-  return gang ~= nil and gang.name == name
+  if not gang or gang.name ~= name then return false end
+  if minGrade ~= nil then
+    local level = gang.grade and gang.grade.level
+    if type(level) ~= "number" or level < minGrade then return false end
+  end
+  return true
 end
 
 --- Job grade level, or -1 when the character does not hold it. Minus one rather than nil so
@@ -66,11 +85,13 @@ function OPX.GetMetadata(key)
   return metadata[key]
 end
 
---- The local player's position, flattened out of the vector-shaped value so the wire format
---- and the shared math helpers see one shape.
+--- The local player's position, flattened so the wire format and the shared math helpers
+--- see one shape. `Open77.character.position()` returns THREE numbers, not a vector and not
+--- a table, so it is destructured rather than indexed: indexing the first return value was
+--- indexing a number, which answers nil for every axis.
 ---@return Vector3Like|nil
 function OPX.GetPosition()
-  local position = Open77.character.position()
-  if not position then return nil end
-  return { x = position.x, y = position.y, z = position.z }
+  local x, y, z = Open77.character.position()
+  if type(x) ~= "number" or type(y) ~= "number" or type(z) ~= "number" then return nil end
+  return { x = x, y = y, z = z }
 end

@@ -114,6 +114,10 @@ CreateThread(function()
     Wait(SAMPLE_MS)
 
     if not OPX.BootError then
+      -- deliberately `pairs(OPX.Players)` and not `OPX.GetPlayers()`: that walk evicts, and
+      -- an eviction here would put a database write inside a 1 Hz loop. Nothing is lost by
+      -- not evicting, because `OPX.SamplePosition` re-checks that the slot still belongs to
+      -- this character before it reads a coordinate.
       for _, player in pairs(OPX.Players) do
         OPX.SamplePosition(player)
       end

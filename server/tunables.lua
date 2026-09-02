@@ -59,13 +59,17 @@ local DECLARATION = {
 
   SELECTION_MS = {
     value = Config.ENTRY.PIPELINE_MS,
-    type = "integer", min = 30000, max = 900000, step = 15000, unit = "ms", apply = "live",
+    -- the ceiling is PIPELINE_MS, a minute below GATE_MS, and not a round 900000: the core
+    -- takes its gate hold once per join and never refreshes it, so a selection the panel
+    -- could stretch past the liveness interval would have the host declare this resource
+    -- dead mid-screen and open the gate with `liveness_lost:opx77_core`
+    type = "integer", min = 30000, max = 240000, step = 15000, unit = "ms", apply = "live",
     label = "Character selection deadline", group = "Characters", order = 2,
     description =
       "How long a joining player may sit in the character screen before the core gives " ..
-      "up and releases the readiness gate without them. Keep it below the gate timeout " ..
-      "in config/server.lua, so the core gives up first and can say why rather than " ..
-      "being timed out by the host.",
+      "up and releases the readiness gate without them. The maximum is held below the " ..
+      "gate's liveness interval in config/server.lua, so the core always gives up first " ..
+      "and can say why rather than being declared dead by the host.",
   },
 }
 

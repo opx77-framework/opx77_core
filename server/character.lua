@@ -186,9 +186,28 @@ function OPX.CreateCharacter(source, payload)
     log.warn("citizen id collision, drawing another")
   end
 
-  -- the default job is a membership like any other, so new and promoted look the same
-  OPX.Storage.Players.upsertGroup(entity.citizenId, "job", entity.job.name, 0)
-  OPX.Storage.Players.upsertGroup(entity.citizenId, "gang", entity.gang.name, 0)
+  -- The default job is a membership like any other, so new and promoted look the same -- and
+  -- the row is not optional: a character carrying `job.name = "unemployed"` with no row in
+  -- opx77_player_groups is one `OPX.SetPlayerPrimaryJob` refuses forever with `job.notMember`,
+  -- because the membership is what it checks. Both results were discarded until now.
+  local jobRow = OPX.Storage.Players.upsertGroup(entity.citizenId, "job", entity.job.name, 0)
+  local gangRow = OPX.Storage.Players.upsertGroup(entity.citizenId, "gang", entity.gang.name, 0)
+  if not jobRow.ok or not gangRow.ok then
+    local failed = not jobRow.ok and jobRow or gangRow
+    -- Undone rather than handed back: a half-created character is worse than none, and the
+    -- account can simply create again. A hard DELETE and not the soft one -- this row is
+    -- seconds old and holds nothing, and the foreign key on opx77_player_groups is
+    -- ON DELETE CASCADE, so whichever membership did land goes with it.
+    local undone = OPX.Storage.execute(
+      "DELETE FROM opx77_players WHERE citizen_id = @citizen",
+      { citizen = entity.citizenId })
+    if not undone.ok then
+      log.error(("%s was inserted, its memberships failed (%s), and the row could not be " ..
+        "removed either (%s): that character can never hold a job and the row has to go by hand")
+        :format(entity.citizenId, tostring(failed.detail), tostring(undone.detail)))
+    end
+    return Result.err("error.unavailable", tostring(failed.detail))
+  end
 
   OPX.Logger.log({
     event = "character.create",
@@ -227,7 +246,7 @@ function OPX.DeleteCharacter(source, citizenId)
   if fetched.value.userId ~= session.userId then
     OPX.Logger.security("character.deleteRefused",
       ("player %d tried to delete %s"):format(source, citizenId),
-      { userId = session.userId, owner = fetched.value.userId })
+      { userId = session.userId, owner = fetched.value.userId }, source)
     -- the SAME code a missing character gets: "not yours" is an existence oracle
     return Result.err("character.notFound", citizenId)
   end
@@ -260,6 +279,22 @@ end
 
 --- True once the platform's view of a player has stopped moving. Placing somebody
 --- mid-transition is how a respawn lands on top of another one.
+---
+--- OPEN QUESTION, deliberately left alone. The platform's own prescribed test for "not yet
+--- incarnated" is a NIL snapshot, which this already rejects. What nobody here has been able
+--- to establish is what `getLifeState` answers on the SERVER for a client still sitting on the
+--- "press any key to continue" screen: if that is a table with phase "dead", then accepting
+--- "dead" lets placement kill and respawn a player who is not incarnated, which crashes their
+--- client. If it is nil, or "alive", this is already correct and dropping "dead" would only
+--- break a legitimately dead player switching characters. No shipped binary or doc settles it.
+---
+--- One measurement settles it, and it needs no code: put a client on that screen and run the
+--- existing `/opx77.where <id>`, which already prints `life : %s` from `getLifeState`.
+--- "unreadable" means this function is right as it stands; "dead" or "alive" means the guard
+--- is a real hole, and the only sound replacement is a positive incarnation check --
+--- `Open77.ready.status(source)` showing no hold whose `resource` is `__platform` -- which
+--- cannot be adopted until some resource here emits `open77:session:gameplayReady`, because
+--- until then that hold never clears and the check would place nobody at all.
 ---@param life table|nil
 ---@return boolean
 local function isSettled(life)
@@ -295,7 +330,9 @@ function OPX.PlaceCharacter(player)
     target = { x = spawn.X, y = spawn.Y, z = spawn.Z, heading = spawn.HEADING, bucket = 0 }
   end
 
-  -- five looks over a second: the gate has just opened and the player may still be settling
+  -- five looks over a second: the player may still be settling. The gate has NOT opened -- the
+  -- core is still holding it and only releases in SelectCharacter once this has returned --
+  -- so this poll is the whole of what stands between placement and a player mid-transition.
   local life
   for _ = 1, 5 do
     life = Open77.players.getLifeState(source)
@@ -320,7 +357,20 @@ function OPX.PlaceCharacter(player)
     health = OPX.Math.clamp(health / 100, 0.15, 1.0),
     graceMs = 5000,
   })
-  if not respawned then return false, tostring(respawnError) end
+  if not respawned then
+    -- we killed them and could not put them back. A revive leaves the body where it fell
+    -- rather than where the row says, so MaySample stays false and the stored position
+    -- survives for the next attempt.
+    local revived, reviveError = Open77.players.revive(source, {
+      health = OPX.Math.clamp(health / 100, 0.15, 1.0),
+      graceMs = 5000,
+    })
+    if not revived then
+      log.error(("%d was killed for placement and neither respawn (%s) nor revive (%s) put them back")
+        :format(source, tostring(respawnError), tostring(reviveError)))
+    end
+    return false, tostring(respawnError)
+  end
 
   -- after the transaction: armour is no respawn option, and the body is about to be replaced
   local armor = tonumber(data.metadata.armor) or 0
@@ -363,7 +413,7 @@ function OPX.SelectCharacter(source, citizenId)
     if not session or wanted.value.userId ~= session.userId then
       OPX.Logger.security("character.notYours",
         ("player %d asked to switch to %s"):format(source, parsed.value),
-        { userId = session and session.userId, owner = wanted.value.userId })
+        { userId = session and session.userId, owner = wanted.value.userId }, source)
       -- the same code a missing character gets, for the same reason as in Login
       return Result.err("character.notFound", parsed.value)
     end

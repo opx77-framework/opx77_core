@@ -77,6 +77,10 @@ permissions {
   "players.life.kill",
   "players.life.respawn",
 
+  -- the recovery for a placement that killed and then could not respawn: without it a failed
+  -- respawn leaves the player dead with nothing in this resource able to undo it
+  "players.life.revive",
+
   "players.damage.apply", -- armour is re-applied after respawn; nothing here reads it back
 
   -- Spawning a character's own car, and writing back what happened to it. The runtime id is

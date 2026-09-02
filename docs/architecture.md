@@ -80,12 +80,22 @@ qui n'apparaît qu'après un renommage.
 Un fichier ajouté à cette ressource tape `OPX.` et trouve tout le framework.
 Pas de seconde globale, rien à importer.
 
-Depuis une ressource **cliente** satellite, `getSharedObject` rend la moitié
-*données* de cette table — version, config partagée, définitions des métiers
-et des gangs, personnage courant. Il ne peut pas rendre les fonctions : la
-plateforme fait passer chaque export par un codec, « arguments and results
-must be serializable », et une fonction ne se sérialise pas. Les appels
-restent donc des exports individuels.
+Depuis une ressource **cliente** satellite, il n'y a pas de `getSharedObject`
+et il ne peut pas y en avoir : la plateforme fait passer chaque export par un
+codec, « arguments and results must be serializable », et une fonction ne se
+sérialise pas. Rendre `OPX` d'un bloc rendrait une table amputée de tout ce qui
+la rend utile.
+
+La moitié *données* est donc découpée en exports individuels, chacun rendant
+une forme close : `GetVersion`, `GetSharedConfig`, `GetJobs`, `GetGangs`,
+`GetOrigins`, `GetPlayerData`, `GetCharacters`. Les grades y sont réémis en
+tableau 1-based portant un `level` explicite, jamais la table source indexée à
+partir de `0` : aucune table à clé `0` n'a jamais traversé ce codec, et un
+export n'est pas l'endroit où le découvrir.
+
+Les changements d'état, eux, ne se demandent pas : ils arrivent, sur les deux
+canaux de `OPX.Events` (`Client` sur le fil, `Local` sur le bus local du
+client, décrits dans `README.md`).
 
 Côté **serveur** il n'y a pas d'équivalent et il ne peut pas y en avoir : le
 runtime serveur n'installe aucun `exports`. Le gameplay serveur est un fichier
@@ -144,16 +154,29 @@ Le core déclare sa participation une fois au boot, ce qui pose un verrou sur
 chaque joueur connecté ensuite — il ne court pas après un verrou avant qu'autre
 chose déplace le joueur, il en a déjà un avant que le joueur existe.
 
-Deux échéances, et la nôtre est la plus courte. L'hôte ouvre la barrière
-lui-même à `GATE_MS` et émet `timeout:opx77_core`, potentiellement avec le
-joueur encore dans l'écran de sélection et **sans pantin du tout**. Le core se
-donne donc une échéance en dessous : il abandonne le premier, relâche
-délibérément, et dit pourquoi.
+Deux échéances, et la nôtre est la plus courte. L'`livenessIntervalMs` déclaré
+au `participate` n'est pas une limite imposée au joueur : c'est un chien de
+garde sur nous, et il ne se déclenche que sur la preuve que le détenteur du
+verrou a disparu. L'hôte ouvre alors la barrière lui-même et émet
+`liveness_lost:opx77_core` — pas `timeout:`, qui n'existe dans aucune assembly
+livrée malgré ce qu'annonce le site — potentiellement avec le joueur encore
+dans l'écran de sélection et **sans pantin du tout**. Le core se donne donc une
+échéance en dessous : il abandonne le premier, relâche délibérément, et dit
+pourquoi.
+
+Le nôtre n'est d'ailleurs pas le seul verrou. Chaque joueur en porte un second,
+nommé `__platform`, sans échéance et qu'aucun Lua ne peut relâcher : il ne
+tombe que lorsque le client a annoncé `open77:session:gameplayReady`, ce
+qu'émet `open77_appearance` une fois le pantin réellement attaché et vivant.
+C'est ce qui donne son sens à une barrière ouverte — « ce joueur est incarné »,
+et pas seulement « les autres ressources ont fini ». Sur un serveur sans
+ressource qui émette cet événement, aucune barrière ne s'ouvre jamais.
 
 Le placement se fait par **kill → respawn**, jamais par transform brut : la
 transaction de respawn porte le fondu, le préchargement du streaming et la
 fenêtre de grâce qu'un téléport direct saute. Et l'état de vie est lu avant,
-parce que le timeout de l'hôte peut encore gagner.
+parce que la barrière peut s'être ouverte sur un abandon de verrou plutôt que
+sur une incarnation.
 
 ## Ce qui manque
 

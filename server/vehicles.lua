@@ -26,10 +26,16 @@ local function nowMs()
   return math.floor(Open77.time.monotonic() * 1000)
 end
 
+--- The same predicate as `finite` elsewhere in this framework, coercing first and answering
+--- with the number: anything `tonumber` accepts, so long as it is neither NaN nor either
+--- infinity. It carries no range of its own -- a caller that needs one applies it to the
+--- answer -- so that "finite" means exactly one thing everywhere and a bound stays visible
+--- where it bites.
 ---@param value any
 ---@return number|nil
-local function finite(value)
+local function finiteNumber(value)
   value = tonumber(value)
+  -- `value ~= value` is the NaN check, not a typo: NaN is the one value unequal to itself
   if value == nil or value ~= value or value == math.huge or value == -math.huge then
     return nil
   end
@@ -211,7 +217,7 @@ function Vehicles.Store(plateId, garage)
     local fetched = Store.fetchOne(plateId)
     if fetched.ok then
       local vehicle = fetched.value
-      vehicle.health = finite(snapshot.health) or vehicle.health
+      vehicle.health = finiteNumber(snapshot.health) or vehicle.health
       vehicle.damage = Open77.vehicles.getDamage(record.id)
       vehicle.metadata = vehicle.metadata or {}
       vehicle.metadata.flags = tonumber(snapshot.flags) or nil
@@ -301,7 +307,7 @@ CreateThread(function()
         local fetched = Store.fetchOne(plateId)
         if not fetched.ok then return end
         local vehicle = fetched.value
-        vehicle.health = finite(snapshot.health) or vehicle.health
+        vehicle.health = finiteNumber(snapshot.health) or vehicle.health
         vehicle.damage = Open77.vehicles.getDamage(record.id)
         vehicle.metadata = vehicle.metadata or {}
         vehicle.metadata.flags = tonumber(snapshot.flags) or nil

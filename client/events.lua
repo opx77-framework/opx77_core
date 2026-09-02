@@ -1,9 +1,25 @@
---- Every server-to-client handler: update the mirrored state, re-emit a resource-local event,
---- log. The re-emitted names are the same strings the server sends, so a satellite that would
---- rather not hold `network.events` can listen locally instead.
+--- Every server-to-client handler, in the same three steps: update the mirrored state, fire
+--- the local event, log. The order matters -- the state is written before the event, so a
+--- handler woken by it reads the change rather than the value it replaced.
+---
+--- This publishes the core's state on TWO channels, and a satellite picks one:
+---
+---   networked -- `OPX.Events.Client.*`, the `opx77:client:*` names the server sends. A
+---     listener holds `network.events` and registers with `RegisterNetEvent`. These are the
+---     wire and they do not change.
+---   local -- `OPX.Events.Local.*`, fired below with `TriggerEvent`. A listener registers
+---     with a plain `AddEventHandler` and needs no permission. The client's local event bus
+---     is host-wide, so this reaches any resource, not only this one.
+---
+--- The two vocabularies are deliberately disjoint. A `TriggerEvent` here would also reach
+--- every `RegisterNetEvent` handler of the same name -- the dispatcher matches on the name
+--- and ignores the network flag -- so re-emitting a wire name from inside its own handler
+--- re-enters that handler. Tick-paced rather than recursive, so it is a silent permanent busy
+--- loop rather than a crash. `playerLoaded` and `playerUnloaded` used to do exactly that.
 
 local log = OPX.Log.scope("events")
 local Events = OPX.Events
+local Local = Events.Local
 
 RegisterNetEvent(Events.Client.CHARACTERS, function(payload)
   if type(payload) ~= "table" then return end
@@ -21,7 +37,7 @@ RegisterNetEvent(Events.Client.CHARACTERS, function(payload)
   OPX.Characters.origins = type(payload.origins) == "table" and payload.origins or {}
 
   log.info(("%d character(s) available, %d slot(s)"):format(#list, slots))
-  TriggerEvent("opx77:client:charactersReady", OPX.Characters)
+  TriggerEvent(Local.CHARACTERS_READY, OPX.Characters)
 end)
 
 RegisterNetEvent(Events.Client.PLAYER_LOADED, function(playerData)
@@ -33,13 +49,13 @@ RegisterNetEvent(Events.Client.PLAYER_LOADED, function(playerData)
     tostring(playerData.citizenId),
     tostring(playerData.charInfo and playerData.charInfo.firstName),
     tostring(playerData.charInfo and playerData.charInfo.lastName)))
-  TriggerEvent("opx77:client:playerLoaded", playerData)
+  TriggerEvent(Local.PLAYER_LOADED, playerData)
 end)
 
 RegisterNetEvent(Events.Client.PLAYER_UNLOADED, function()
   OPX.PlayerData = {}
   OPX.IsLoggedIn = false
-  TriggerEvent("opx77:client:playerUnloaded")
+  TriggerEvent(Local.PLAYER_UNLOADED)
 end)
 
 --- The whole of PlayerData, resent after any change. Whole rather than a patch: a merge
@@ -47,22 +63,22 @@ end)
 RegisterNetEvent(Events.Client.SET_PLAYER_DATA, function(playerData)
   if type(playerData) ~= "table" then return end
   OPX.PlayerData = playerData
-  TriggerEvent("opx77:client:playerDataChanged", playerData)
+  TriggerEvent(Local.PLAYER_DATA_CHANGED, playerData)
 end)
 
 RegisterNetEvent(Events.Client.MONEY_CHANGE, function(moneyType, amount, action, balance)
   if OPX.PlayerData.money then OPX.PlayerData.money[moneyType] = balance end
-  TriggerEvent("opx77:client:moneyChanged", moneyType, amount, action, balance)
+  TriggerEvent(Local.MONEY_CHANGED, moneyType, amount, action, balance)
 end)
 
 RegisterNetEvent(Events.Client.JOB_UPDATE, function(job)
   OPX.PlayerData.job = job
-  TriggerEvent("opx77:client:jobChanged", job)
+  TriggerEvent(Local.JOB_CHANGED, job)
 end)
 
 RegisterNetEvent(Events.Client.GANG_UPDATE, function(gang)
   OPX.PlayerData.gang = gang
-  TriggerEvent("opx77:client:gangChanged", gang)
+  TriggerEvent(Local.GANG_CHANGED, gang)
 end)
 
 --- A refusal carrying a code and nothing else. The code is a locale key, so a UI renders it
@@ -70,5 +86,5 @@ end)
 RegisterNetEvent(Events.Client.NOTIFY, function(payload)
   if type(payload) ~= "table" then return end
   log.warn(("server refused: %s"):format(tostring(payload.code)))
-  TriggerEvent("opx77:client:refused", payload.code, payload.kind)
+  TriggerEvent(Local.REFUSED, payload.code, payload.kind)
 end)

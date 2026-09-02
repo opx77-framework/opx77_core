@@ -29,14 +29,43 @@ Client-side, because the Open77 server runtime installs no export mechanism. A s
 |---|---|
 | `GetPlayerData` | the whole loaded character |
 | `IsLoggedIn` | whether a character is loaded |
-| `HasJob` / `HasGang` | membership, with an optional minimum grade and duty flag |
-| `GetSharedConfig` | jobs, gangs, origins and the shared surface |
+| `HasJob(name, onDutyOnly?, minGrade?)` | job membership, with an optional duty flag and minimum grade |
+| `HasGang(name, minGrade?)` | gang membership, with an optional minimum grade — no duty flag, a gang has no shifts |
+| `GetJobs` / `GetGangs` / `GetOrigins` | the static definitions, with grades as a 1-based array carrying an explicit `level` |
+| `GetVersion` | the core's version, for a compatibility check |
+| `GetSharedConfig` | server name, locale in force, money types and default, character name bounds, notification position |
 | `Locale` | one rendered line for a refusal code |
 | `GetCharacters` | the roster last sent to this client |
 | `RequestCharacters` | ask for it again |
 | `SelectCharacter` / `CreateCharacter` / `DeleteCharacter` | the character screen |
 
-Everything else is one field of `GetPlayerData` or one key of `GetSharedConfig`.
+Static definitions come from `GetJobs`, `GetGangs` and `GetOrigins`; everything else is one field of `GetPlayerData` or one key of `GetSharedConfig`.
+
+The last four are requests, not reads: they fire an `opx77:server:*` net event and answer only that it was sent. The result arrives on the events below.
+
+## Events
+
+The core publishes its state on two channels, both listed in `shared/main.lua` under `OPX.Events`. A satellite picks one.
+
+| Channel | Table | How to listen | Permission |
+|---|---|---|---|
+| networked | `OPX.Events.Client` | `RegisterNetEvent` | `network.events` |
+| local | `OPX.Events.Local` | `AddEventHandler` | none |
+
+The local channel is fired by the core's own client half straight after it has updated its mirror, so a handler can call `GetPlayerData` and see the change that woke it. The client's local event bus is host-wide, so it reaches any resource, not only this one.
+
+No name appears on both channels, and that is load-bearing rather than tidy: this platform's dispatcher matches an event by name and ignores the network flag, so a `TriggerEvent` also reaches every `RegisterNetEvent` handler of the same name. A local re-emission that reused its own wire name would re-enter the handler that fired it — tick-paced rather than recursive, so it would be a silent permanent busy loop, not a crash.
+
+| Local event | Fired when |
+|---|---|
+| `opx77:client:charactersReady` | the roster arrived |
+| `opx77:client:onPlayerLoaded` | a character entered the world |
+| `opx77:client:onPlayerUnloaded` | the character left |
+| `opx77:client:playerDataChanged` | any field of `PlayerData` changed |
+| `opx77:client:moneyChanged` | a balance moved |
+| `opx77:client:jobChanged` / `opx77:client:gangChanged` | a group or grade changed |
+| `opx77:client:refused` | the server refused something, with a locale key |
+| `opx77:client:appearanceRequired` / `opx77:client:appearanceChanged` | the appearance service wants a creator run, or switched look |
 
 ## Configuration
 

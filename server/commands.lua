@@ -46,6 +46,8 @@ end
 
 RegisterCommand("opx77", function(source, _, raw)
   local players = OPX.GetPlayers()
+  -- sorted, so two runs of this command can be compared line for line
+  table.sort(players, function(a, b) return a.PlayerData.source < b.PlayerData.source end)
   local lines = {
     ("opx77_core %s -- %d character(s) in the world, %d session(s) connected")
       :format(OPX.VERSION, #players, OPX.Table.count(OPX.Sessions)),

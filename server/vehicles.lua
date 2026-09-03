@@ -23,18 +23,7 @@ end
 --- A plate in the configured shape. Uppercase ASCII only: the column is `ascii_bin`.
 ---@return string
 local function plate()
-  local out = {}
-  for index = 1, #Config.PLATE_FORMAT do
-    local slot = Config.PLATE_FORMAT:sub(index, index)
-    if slot == "1" then
-      out[index] = tostring(math.random(0, 9))
-    elseif slot == "A" then
-      out[index] = string.char(math.random(65, 90))
-    else
-      out[index] = slot
-    end
-  end
-  return table.concat(out)
+  return OPX.String.random(Config.PLATE_FORMAT)
 end
 
 --- The character this connection has loaded, or nil.
@@ -188,7 +177,11 @@ function Vehicles.Store(plateId, garage)
   local snapshot = Open77.vehicles.get(record.id)
   if snapshot ~= nil then
     local fetched = Store.fetchOne(plateId)
-    if fetched.ok then
+    if not fetched.ok then
+      -- the removal below still happens, so say so: the condition is lost, not deferred
+      Open77.log.error(("[vehicles] %s is being removed but its row could not be read (%s); " ..
+        "its condition is not written"):format(plateId, tostring(fetched.detail)))
+    else
       local vehicle = fetched.value
       vehicle.health = finiteNumber(snapshot.health) or vehicle.health
       vehicle.damage = Open77.vehicles.getDamage(record.id)

@@ -138,6 +138,7 @@
 ---@field displayName string
 ---@field connectedAt integer
 ---@field gateSession any|nil     the readiness-gate session while a hold is held
+---@field heldAt integer|nil      when the hold was taken, `OPX.Now()` milliseconds
 ---@field citizenId CitizenId|nil set once a character is loaded
 ---@field charactersSent boolean
 ---@field released boolean|nil

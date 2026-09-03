@@ -155,13 +155,15 @@ function OPX.SaveAppearance(identifier, snapshot)
   local canonical, reason = Appearance.canonical(snapshot)
   if not canonical then return Result.err("appearance.invalid", reason) end
 
+  -- before the encode: two identical canonical snapshots encode to the same bytes, so the
+  -- size check below cannot answer differently for a face that is already stored
+  local data = player.PlayerData
+  if Appearance.same(data.appearance, canonical) then return Result.ok(data.appearance) end
+
   local encoded = json.encode(canonical)
   if #encoded > Config.MAX_JSON_BYTES then
     return Result.err("appearance.tooLarge", tostring(#encoded))
   end
-
-  local data = player.PlayerData
-  if Appearance.same(data.appearance, canonical) then return Result.ok(data.appearance) end
 
   local written = OPX.Storage.Players.saveAppearance(data.citizenId, canonical)
   if not written.ok then return written end

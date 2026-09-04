@@ -30,7 +30,7 @@ commentaires du bootstrap lui-même, qui sont faux en au moins un endroit
 autour de l'absence d'un départ. On avait ensuite conclu qu'il en existait
 deux, parce que les ressources officielles écoutent bien les deux noms.
 
-Le binaire tranche : **seul `onPlayerDisconnected(playerId)` est émis.** Il
+Le binaire tranche : **seul `onPlayerDisconnected` est émis.** Il
 vient de `NotifyPlayerDisconnected`, avant que la fiche de la barrière d'entrée
 soit détruite. Le jeton `playerDropped` n'apparaît dans aucune assembly ailleurs
 que dans le littéral du bootstrap lui-même — c'est le texte de son propre
@@ -38,8 +38,18 @@ que dans le littéral du bootstrap lui-même — c'est le texte de son propre
 ressources officielles l'écoutent ne prouve rien : elles écoutent toutes
 `onPlayerDisconnected` en plus, donc rien ne casse chez elles non plus.
 
-**Ce que fait le core.** Il écoute les deux (`server/events.lua`). Le
-gestionnaire `playerDropped` est du code mort et doit être retiré ; c'est
+**Mise à jour (page « Connection control » de la plateforme).** Cette entrée
+est désormais à moitié périmée, dans le bon sens : l'événement **est
+documenté**, et sa signature est `onPlayerDisconnected(playerId, reason)`.
+`reason` vaut `connection_closed` quand le transport a lâché ou que le joueur a
+quitté, sinon le texte passé à `Open77.players.disconnect`, `kick` ou `ban`.
+Reste vrai : c'est le seul événement de départ, et `playerDropped` n'est émis
+par rien. S'y ajoute `onPlayerRejected(userId, name, code, message)`, qui n'est
+pas un départ — il concerne une connexion refusée **avant** l'admission, donc
+sans `playerId`. Le core ne l'écoute pas.
+
+**Ce que fait le core.** Il écoute `onPlayerDisconnected` et lit son `reason`
+(`server/events.lua`). Le gestionnaire `playerDropped` a été retiré ; c'est
 `onPlayerDisconnected` qu'il ne faut jamais retirer. `OPX.Logout` reste
 idempotent — entendre un départ deux fois coûte une lecture de table.
 

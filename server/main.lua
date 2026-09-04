@@ -37,6 +37,25 @@ local function displayNameOf(playerId)
   return fn and fn(playerId) or nil
 end
 
+--- Everything the host will vouch for about an admitted player, in one call, or nil when it
+--- vouches for nothing. No permission is needed.
+---
+--- Prefer this at the entry points -- session creation, commands, audit -- and keep
+--- `OPX.UserIdOf` for the sweeps in server/functions.lua, which run per player per tick and
+--- want a string rather than a fresh table.
+---@param playerId Source
+---@return PlayerIdentity|nil
+local function identityOf(playerId)
+  local players = Open77.players
+  if type(players) ~= "table" or type(players.identity) ~= "function" then return nil end
+  local ok, identity = pcall(players.identity, playerId)
+  if not ok or type(identity) ~= "table" then return nil end
+  return identity
+end
+
+---@type fun(playerId: Source): PlayerIdentity|nil
+OPX.IdentityOf = identityOf
+
 --- The session for `playerId`, created if this VM has not seen them and dropped if the slot
 --- now belongs to somebody else. Everything that wants a session goes through here.
 ---@param playerId Source|string
@@ -45,8 +64,11 @@ function OPX.EnsureSession(playerId)
   playerId = tonumber(playerId)
   if not playerId or playerId <= 0 then return nil end
 
-  local userId = userIdOf(playerId)
-  if userId == nil or userId == "" then
+  -- one host call for the account id, the name, and the join instant. The older pair of
+  -- globals is the fallback for a host that predates Open77.players.identity.
+  local identity = identityOf(playerId)
+  local userId = identity and identity.userId or userIdOf(playerId)
+  if type(userId) ~= "string" or userId == "" then
     -- no verified identity: nothing may be attributed to them
     OPX.ForgetSession(playerId)
     return nil
@@ -63,7 +85,13 @@ function OPX.EnsureSession(playerId)
   session = {
     source = playerId,
     userId = userId,
-    displayName = displayNameOf(playerId) or "",
+    -- the display name is authenticated but the player chooses it, so it is a label and
+    -- never a key. It is sanitised HERE, once, because every log line and every command
+    -- that prints a player takes it from the session: a newline in a chosen name would
+    -- otherwise forge a whole audit line.
+    displayName = OPX.Logger.safe(identity and identity.name or displayNameOf(playerId), 64),
+    fingerprint = identity and identity.fingerprint or nil,
+    joinedAt = identity and identity.joinedAt or nil,
     connectedAt = OPX.Now(),
     gateSession = nil, -- set by server/lifecycle.lua while the readiness gate is held
     charactersSent = false, -- set by server/character.lua, so a second request is cheap

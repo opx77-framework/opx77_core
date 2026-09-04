@@ -198,11 +198,14 @@ Console : `acl.reload`, `acl.list`, `acl.check <playerId> <permission>`.
 Relevé le 2026-08-31 sur `open77-server-2.31.4+op77.11`. Le code livré
 contredit la doc sur plusieurs points, et c'est lui qui fait foi.
 
-- **Il n'existe qu'un seul événement de déconnexion**, non documenté :
-  `onPlayerDisconnected(playerId)`. Les ressources officielles écoutent aussi
-  `playerDropped()`, mais **ce nom n'est émis par rien** — il n'apparaît dans
-  aucune assembly hors du littéral du bootstrap. Ces gestionnaires-là sont du
-  code mort, y compris le nôtre. Détail dans `docs/unknowns.md`.
+- **Il n'existe qu'un seul événement de déconnexion** :
+  `onPlayerDisconnected(playerId, reason)`. Les ressources officielles écoutent
+  aussi `playerDropped()`, mais **ce nom n'est émis par rien** — il n'apparaît
+  dans aucune assembly hors du littéral du bootstrap. Ces gestionnaires-là sont
+  du code mort, y compris le nôtre. Détail dans `docs/unknowns.md`.
+  *Corrigé depuis :* la plateforme documente maintenant cet événement, avec son
+  second argument `reason`, dans sa page « Connection control ». Le point qui
+  reste vrai est qu'il n'y en a qu'un.
 - **`Open77.state.save/load/clear` existe** et conserve un état autoritaire à
   travers un reload. Absent de la page `server-api.md` qui se dit complète.
 - **`server_script` prend une entrée par ligne**, et les globs sont à

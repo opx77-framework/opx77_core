@@ -4,31 +4,57 @@
 local Events = OPX.Events
 
 --- `source` is not populated for a host-fanned event, so the id arrives as an argument and as
---- a string.
-AddEventHandler(Events.Platform.PLAYER_CONNECTED, function(rawPlayerId, playerName)
+--- a string. `onPlayerConnected` carries the id and nothing else: the name this used to print
+--- was always nil, because there was never a second argument to read it from.
+AddEventHandler(Events.Platform.PLAYER_CONNECTED, function(rawPlayerId)
   local source = tonumber(rawPlayerId)
   if not source or source <= 0 then
     Open77.log.error(("[events] unusable player id %q on connect"):format(tostring(rawPlayerId)))
     return
   end
-  Open77.log.debug(("[events] %s connected as %d"):format(tostring(playerName), source))
+  local identity = OPX.IdentityOf(source)
+  Open77.log.debug(("[events] %s (%s) connected as %d"):format(
+    OPX.Logger.safe(identity and identity.name or "?", 64),
+    identity and identity.userId or "?", source))
   OPX.Lifecycle.beginEntry(source)
 end)
 
 local forgetThrottle -- forward-declared: defined below, used by the handler above it
 
-local function departed(source)
+---@param source Source|string
+---@param reason? any  `connection_closed` for a quit or a dropped link, otherwise the text
+---        the disconnect was queued with by disconnect, kick or ban
+local function departed(source, reason)
   source = tonumber(source)
   if not source then return end
+
+  -- read before OPX.Logout, which is what puts the character down: an audit entry logged
+  -- without a source is keyed by citizen id, and afterwards there is no citizen id to name
+  local player = OPX.Players[source]
+  local session = OPX.Sessions[source]
+  local citizenId = player and player.PlayerData and player.PlayerData.citizenId or nil
+
+  OPX.Logger.log({
+    event = "session.disconnect",
+    severity = "info",
+    source = source,
+    citizenId = citizenId,
+    userId = session and session.userId or nil,
+    message = OPX.Logger.safe(reason or "connection_closed", 128),
+  })
+
   OPX.Logout(source)
   OPX.ForgetSession(source)
-  forgetThrottle(source)
+  forgetThrottle(source, citizenId)
 end
 
 --- Best-effort: a departure nobody reports is covered by the `userId` re-check in
 --- `OPX.EnsureSession`, and `OPX.Logout` is idempotent.
-AddEventHandler("onPlayerDisconnected", function(rawPlayerId)
-  departed(rawPlayerId)
+---
+--- This is the departure of an ADMITTED player. A connection refused at the door never
+--- reaches here; that is `onPlayerRejected`, which the core deliberately does not listen for.
+AddEventHandler("onPlayerDisconnected", function(rawPlayerId, reason)
+  departed(rawPlayerId, reason)
 end)
 
 --- The gate opened. `liveness_lost:<res>[,<res>...]` means a hold passed its liveness deadline
@@ -53,10 +79,12 @@ end)
 
 --- Clears everything keyed by a departing source, including the doorway cooldowns below.
 ---@param source Source
-function forgetThrottle(source)
+---@param citizenId? CitizenId  the character they were holding, captured before logout
+function forgetThrottle(source, citizenId)
   OPX.ForgetCooldowns(source)
-  -- the audit dedupe is keyed by source too, and a source is recycled
-  if OPX.Logger and OPX.Logger.forget then OPX.Logger.forget(source) end
+  -- the audit dedupe is keyed by source too, and a source is recycled. Entries logged
+  -- without a source are keyed by citizen id, which is why it is passed through.
+  if OPX.Logger and OPX.Logger.forget then OPX.Logger.forget(source, citizenId) end
 end
 
 -- Every handler below checks a cooldown BEFORE its `CreateThread`, on a `.request` key of its

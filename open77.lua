@@ -78,6 +78,15 @@ permissions {
   "players.damage.apply", -- armour is re-applied after respawn; nothing here reads it back
   "world.vehicles", -- spawning a character's own car, and writing back what happened to it
 
+  -- server/lifecycle.lua only, and only on the three paths where the core cannot bring a
+  -- player in. Releasing the gate instead leaves them in the world with no character and a
+  -- roster they cannot close. This is not a moderation tool: nothing here kicks a player for
+  -- what they do, and players.ban is still not requested -- a ban belongs to a gatekeeper
+  -- resource, not to the framework.
+  "players.disconnect",
+
   -- Deliberately not requested: world.props, world.elevators, combat.config,
-  -- players.damage.read, players.disconnect.
+  -- players.damage.read, players.ban, players.gate. A gate handler in the core would put
+  -- every connection behind the resource whose failure modes are the widest, and the host
+  -- admits a player whose handler raised -- so a core bug would be a silent open door.
 }

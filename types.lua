@@ -130,12 +130,24 @@
 ---@field Save fun(): Result
 ---@field Logout fun()
 
+--- What the host will vouch for about an admitted player, as returned by
+--- `Open77.players.identity` and wrapped by `OPX.IdentityOf`. Reading it needs no permission.
+---@class PlayerIdentity
+---@field userId UserId    the Master account id, stable across renames and reinstalls
+---@field name string      the display name the client presents: a label, never a key
+---@field publicKey string the identity public key, base64
+---@field fingerprint string `sha256:<hex>` of the public key
+---@field joinedAt string  when they were admitted, ISO 8601 UTC
+
 --- A connected machine, not a loaded character: somebody in the selection screen has one of
 --- these and no Player.
 ---@class Session
 ---@field source Source
 ---@field userId UserId
 ---@field displayName string
+---@field fingerprint? string `sha256:<hex>` of the identity public key. The client prints
+---        the same string for `identity.dump`, so a player can read it out to an operator.
+---@field joinedAt? string when the host admitted them, ISO 8601 UTC
 ---@field connectedAt integer
 ---@field gateSession any|nil     the readiness-gate session while a hold is held
 ---@field heldAt integer|nil      when the hold was taken, `OPX.Now()` milliseconds

@@ -78,14 +78,45 @@ function Lifecycle.release(source, note)
   Open77.log.debug(("[lifecycle] gate released for %d (%s)"):format(source, note or "done"))
 end
 
+--- Gives up on a player the core cannot bring in, and closes their session.
+---
+--- Releasing the gate on its own is not a refusal: it drops the player into Night City with
+--- no character, no persistence and no way to get one -- and, because opx77_charselector
+--- never sees `onPlayerLoaded`, with a roster it cannot close. The three player-facing
+--- strings this is called with were written for a disconnect ("Try reconnecting."); until
+--- the platform exposed `Open77.players.disconnect`, there was no way to perform one.
+---
+--- The gate is released first so that a host which does not clear holds on departure is not
+--- left holding one, and the old notify-and-release behaviour is the fallback for a host
+--- that predates the call.
+---@param source Source
+---@param code string  a locale key, and the sentence the player reads
+---@param note string  the release note, for the platform log
+local function refuseEntry(source, code, note)
+  local players = Open77.players
+  if type(players) ~= "table" or type(players.disconnect) ~= "function" then
+    OPX.Refuse(source, code, OPX.Operations.ENTRY)
+    Lifecycle.release(source, note)
+    return
+  end
+  Lifecycle.release(source, note)
+  -- the reason is shown on the player's own screen and delivered to onPlayerDisconnected,
+  -- so the departure explains itself in the audit line without any extra bookkeeping
+  local ok, failure = pcall(players.disconnect, source, locale(code))
+  if not ok then
+    Open77.log.error(("[lifecycle] could not disconnect %d: %s"):format(source, tostring(failure)))
+  end
+end
+
 --- Everything the core does for a player who has just connected. On its own thread because it
---- reads the database, and every failure path releases the gate rather than leaving them held.
+--- reads the database, and every failure path closes the session rather than leaving them held
+--- or stranded in the world with no character.
 ---@param source Source
 function Lifecycle.beginEntry(source)
   local session = OPX.EnsureSession(source)
   if not session then
     Open77.log.error(("[lifecycle] no verified identity for %d, refusing entry"):format(source))
-    Lifecycle.release(source, "no-identity")
+    refuseEntry(source, "entry.noIdentity", "no-identity")
     return
   end
 
@@ -96,8 +127,7 @@ function Lifecycle.beginEntry(source)
     if not sent.ok then
       Open77.log.error(("[lifecycle] could not send the character list to %d: %s")
         :format(source, tostring(sent.error)))
-      OPX.Refuse(source, "entry.failed", OPX.Operations.ENTRY)
-      Lifecycle.release(source, "roster-failed")
+      refuseEntry(source, "entry.failed", "roster-failed")
       return
     end
     Lifecycle.watch(source)
@@ -124,10 +154,9 @@ function Lifecycle.watch(source)
       -- pcall: a raise here would leave this player holding the gate for the session
       local ok, timedOut = pcall(function()
         if OPX.Now() < deadline then return false end
-        Open77.log.warn(("[lifecycle] %d spent too long choosing a character; releasing the " ..
-          "gate"):format(source))
-        OPX.Refuse(source, "entry.timedOut", OPX.Operations.ENTRY)
-        Lifecycle.release(source, "selection-timeout")
+        Open77.log.warn(("[lifecycle] %d spent too long choosing a character; closing the " ..
+          "session"):format(source))
+        refuseEntry(source, "entry.timedOut", "selection-timeout")
         return true
       end)
       if not ok then

@@ -92,7 +92,7 @@ function Lifecycle.beginEntry(source)
   Lifecycle.hold(source, "opx77_character_selection")
 
   CreateThread(function()
-    local sent = OPX.SendCharacters(source)
+    local sent = OPX.SendCharacters(source, true)
     if not sent.ok then
       Open77.log.error(("[lifecycle] could not send the character list to %d: %s")
         :format(source, tostring(sent.error)))

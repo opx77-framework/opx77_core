@@ -34,10 +34,14 @@ end
 --- Loads the account and sends its character list. Safe to run twice: a reload empties this
 --- VM's roster and the client re-announces itself.
 ---@param source Source
+---@param pushed? boolean  the core's own send on connect, which neither is cooled nor cools
 ---@return Result  ok value is a list of CharacterSummary
-function OPX.SendCharacters(source)
-  -- cooled here, not at a doorway: also reachable from the unrestricted `/opx77.characters`
-  if OPX.Cooling(source, "roster", 2000) then
+function OPX.SendCharacters(source, pushed)
+  -- cooled here, not at a doorway: also reachable from the unrestricted `/opx77.characters`.
+  -- The push on connect goes out before the client's resources run, so it usually lands
+  -- nowhere; were it to cool, the client's own READY a second later would be dropped with it
+  -- and the roster would not arrive until a retry, after the world had loaded.
+  if not pushed and OPX.Cooling(source, "roster", 2000) then
     return Result.err("error.tooFast", tostring(source))
   end
   local session = OPX.EnsureSession(source)

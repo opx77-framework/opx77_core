@@ -79,4 +79,34 @@ OPX.Config.SERVER = {
   -- resources that would fight the core over where a player stands. The core disables
   -- nothing; it prints once what to do about each. See README, "Placement conflicts".
   CONFLICTING_PLACERS = { "open77_playerstate", "freeroam", "pursuit", "race" },
+
+  -- Who may call the core's server exports. See README, "Server exports".
+  EXPORTS = {
+    -- the reads -- identity, the change cursor, a vehicle's plate: "*" for any server
+    -- resource, or a set such as { opx77_inventory = true }
+    READ = "*",
+
+    -- everything else is refused unless the calling resource is listed here with the scope
+    -- the export needs. The name is read from the host, never from an argument.
+    CALLERS = {
+      opx77_inventory = { scopes = { inventory = true } }, -- the container and item tables
+    },
+
+    -- the most an answer may weigh encoded, in bytes; the host's budget is 48 KiB with its own
+    -- overhead, and an answer past it would reach the caller as an opaque codec refusal
+    MAX_RESULT_BYTES = 32768,
+  },
+
+  -- Bounds on what the inventory storage exports accept. They guard the tables, not the
+  -- gameplay: opx77_inventory decides sizes and weights.
+  INVENTORY = {
+    MAX_SLOTS = 1000, -- slots one container may have
+    MAX_WEIGHT = 4000000000, -- grams; the column is INT UNSIGNED
+    MAX_METADATA_BYTES = 4096, -- one stack's metadata, encoded
+    PAGE_ROWS = 64, -- stacks one read answers at most, before the size guard trims it
+
+    -- kinds whose owner is another row: a character's citizen id or a vehicle's plate, which
+    -- must exist, and whose deletion takes the container with it. Any other kind stands alone.
+    LINKED_KINDS = { character = "citizen", trunk = "plate", glovebox = "plate" },
+  },
 }

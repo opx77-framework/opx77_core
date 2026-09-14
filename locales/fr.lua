@@ -104,4 +104,14 @@ OPX.Locale.register("fr", {
   ["error.tooFast"]          = "Trop vite -- reessayez dans un instant.",
   ["error.notLoggedIn"]      = "Vous n'êtes pas encore en jeu.",
   ["error.noPermission"]     = "Vous n'avez pas le droit de faire ça.",
+
+  ["core.booting"]           = "Le core démarre encore. Réessayez dans un instant.",
+  ["export.callerDenied"]    = "Cette ressource ne peut pas demander ça au core.",
+  ["export.badArgument"]     = "Le core n'a pas pu lire cette demande.",
+  ["export.tooLarge"]        = "Cette réponse est trop volumineuse pour être envoyée.",
+
+  ["inventory.noOwner"]      = "Ce contenant n'appartient à personne.",
+  ["inventory.notFound"]     = "Ce contenant n'existe pas.",
+  ["inventory.unknownToken"] = "Cette sauvegarde n'a jamais été préparée, ou elle a expiré.",
+  ["inventory.saveFailed"]   = "Le contenant n'a pas pu être sauvegardé.",
 })

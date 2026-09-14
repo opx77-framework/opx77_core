@@ -91,6 +91,17 @@ function Vehicles.List(citizenId)
   return Store.fetchByOwner(citizenId)
 end
 
+--- Which owned vehicle a runtime id is, when the core spawned it. A vehicle another resource
+--- created answers nil: it has no row, so nothing durable may be keyed on it.
+---@param vehicleId integer
+---@return string|nil plate, string|nil citizenId
+function Vehicles.PlateOf(vehicleId)
+  for plateId, record in pairs(live) do
+    if record.id == vehicleId then return plateId, record.citizenId end
+  end
+  return nil, nil
+end
+
 --- The stored row, plus whether it is spawned right now.
 ---@param plateId string
 ---@return table result

@@ -269,6 +269,8 @@ function OPX.DeleteCharacter(source, citizenId)
     userId = session.userId,
     source = source,
   })
+  -- the change cursor in server/exports.lua carries it to other server resources
+  TriggerEvent(OPX.Events.Internal.CHARACTER_DELETED, source, citizenId)
   return Result.ok(citizenId)
 end
 

@@ -21,7 +21,8 @@ and reacts; it does not persist anything of its own and does not own a table.
 - A routing bucket of their own for every player without a character, so nobody choosing one
   sees or is seen by anybody else
 - Live tunables, editable from the operator panel without a restart
-- Export-based API to read core data from any client resource
+- Export-based API: reads for client resources, and identity, a change cursor and the inventory
+  storage for server resources
 - Locales, with every refusal answered as a key a satellite can render
 
 ## The schema
@@ -34,6 +35,8 @@ One file per table in [`sql/`](sql/), which is where an operator reads it:
 | `sql/characters.sql` | `opx77_characters` — one character, keyed on `citizen_id` |
 | `sql/character_groups.sql` | `opx77_character_groups` — job and gang memberships |
 | `sql/vehicles.sql` | `opx77_vehicles` — owned vehicles, keyed on the plate |
+| `sql/inventories.sql` | `opx77_inventories` — one container: a bag, a stash, a vehicle's trunk or glovebox |
+| `sql/inventory_items.sql` | `opx77_inventory_items` — one item stack in one slot of one container |
 
 `server/storage/schema.lua` carries the same statements and applies them at boot. **The two
 are edited together.** The Open77 *server* runtime installs no file-reading API — `Open77.resource`
@@ -48,6 +51,16 @@ other. `python3 tools/check_sql_parity.py` proves it and exits non-zero when the
 `opx77_characters` carries one nullable JSON column beyond the obvious ones: `appearance`, the
 character's face, written only by `server/appearance.lua`. It travels inside `PlayerData` and is
 therefore in every event the core publishes.
+
+The two inventory tables hold what `opx77_inventory` decides and nothing the core reads itself.
+A container is unique on `(kind, owner)`. A character's bag (`kind = "character"`) carries its
+citizen id, and a vehicle's trunk or glovebox its plate, each under a cascading foreign key: the
+container goes when that row is really deleted. Deleting a character is soft, so its bag stays,
+exactly as its vehicles and memberships do, and nobody can open it while the character is
+deleted. A stash has neither column and stands alone. `slots` and `max_weight` (grams) are the
+size a container was created with. Every stack is one row keyed on `(inventory_id, slot)`, and a
+save rewrites a container's rows in one transaction. The core touches these tables only through
+the storage exports below; see `opx77_inventory` for everything they mean.
 
 **A database from before this version cannot be upgraded in place.** The table renames
 (`opx77_accounts` → `opx77_users`, `opx77_players` → `opx77_characters`,
@@ -93,10 +106,11 @@ replaced, and the client log says so once. The console reads every answer as a p
 
 ## Exports
 
-Client-side, because the Open77 server runtime installs no export mechanism. A server resource
-that needs core data sends a net event to its own client half, which calls these. There is no
-`exports.<resource>:<name>()` proxy — the call is `Open77.exports.call(resource, name, ...)`,
-it is always asynchronous, and every export answers `{ ok = boolean, ... }`.
+### Client exports
+
+For client resources. There is no `exports.<resource>:<name>()` proxy — the call is
+`Open77.exports.call(resource, name, ...)`, it is always asynchronous, and every export answers
+`{ ok = boolean, ... }`.
 
 | Export | Answers |
 |---|---|
@@ -115,6 +129,60 @@ it is always asynchronous, and every export answers `{ ok = boolean, ... }`.
 
 The last four are requests, not reads: they fire an `opx77:server:*` net event and answer only
 that it was sent. The result arrives on the events below.
+
+### Server exports
+
+For server resources, from `server/exports.lua`, with the same call and the same answer shape.
+The caller is read from the host with `GetInvokingResource()`, never from an argument, and every
+argument is checked whoever sent it. Call them from a `CreateThread`, an event handler or a
+command handler, never at file scope, and keep the promise until it is awaited. Every export
+answers `core.booting` until the boot thread has settled the schema.
+
+Reads go to the resources `EXPORTS.READ` names, every server resource by default. Everything
+else needs its caller listed in `EXPORTS.CALLERS` with the export's scope, and a refusal is an
+`export.denied` security line naming the caller. An answer heavier than
+`EXPORTS.MAX_RESULT_BYTES` encoded is refused with `export.tooLarge` rather than reaching the
+caller as a codec error.
+
+| Export | Scope | Answers |
+|---|---|---|
+| `GetVersion()` | read | `version`, `exports` (the contract number, bumped on a breaking change), and the `scopes` this caller holds |
+| `GetIdentity(target)` | read | `source`, `userId`, `citizenId`, `online`, `loaded`, `gateHeld`, `released`. A player id is online only; a citizen id is also found offline |
+| `GetVehiclePlate(vehicleId)` | read | `plate` and `citizenId` of an owned vehicle the core spawned, absent for any other |
+| `GetChanges(since)` | read | `cursor`, `reset`, `more`, `generation`, and at most 16 `events` of kind `loaded`, `unloaded` or `deleted`, each with `source` and `citizenId` |
+| `InventoryEnsure(kind, owner, { slots, maxWeight })` | `inventory` | `id`, `slots`, `maxWeight`, `created`. The size is used only when it creates |
+| `InventoryRead(id, after?)` | `inventory` | one page of `items` (`slot`, `name`, `count`, `metadata`) after slot `after`, the header on the first page, and `nextAfter` while there may be more |
+| `InventoryStage(token, id, rows)` | `inventory` | appends stacks to a save staged under `token`; the first stage of a container empties it |
+| `InventoryCommit(token)` | `inventory` | writes everything staged under `token` as one transaction |
+| `InventoryResize(id, slots, maxWeight)` | `inventory` | `ok` |
+| `InventoryDelete(id)` | `inventory` | `ok`; the stacks go by cascade |
+| `InventoryHolders(name, limit?)` | `inventory` | `holders`: container `id`, `kind`, `owner`, `slot`, `count`, largest first, at most 50 |
+
+`GetChanges` is a cursor, not a callback bus: server VMs cannot hear each other's events. Start
+from `0`, keep the `cursor` each answer gives, and treat `reset = true` as "the core reloaded or
+the ring moved past you": re-read whatever you keep rather than trusting the events alone. The
+ring holds the last 512 changes.
+
+A save is staged across calls because one argument carries at most 48 KiB. Stage every
+container of a batch under one token, then commit it; a token nobody commits is forgotten after
+30 seconds, and a failed commit writes nothing. `InventoryEnsure` on a `character` kind checks
+that a living character carries the citizen id, and on `trunk` or `glovebox` that the plate is
+owned, answering `inventory.noOwner` otherwise.
+
+```lua
+CreateThread(function()
+  local promise, reason = Open77.exports.call("opx77_core", "GetIdentity", playerId)
+  if not promise then return print("not dispatched: " .. tostring(reason)) end
+  local answer, callError = promise:await()
+  if callError then return print("call failed: " .. tostring(callError)) end
+  if not answer.ok then return print("refused: " .. tostring(answer.error)) end
+  print(answer.citizenId, answer.loaded)
+end)
+```
+
+A reload of the core rejects calls in flight with `export_resource_stopped`, and a call may have
+written before it timed out. The inventory writes are safe to retry: a commit rewrites a
+container whole.
 
 ## Events
 
@@ -160,9 +228,10 @@ raw code at a player.
 
 ### Writing to the core
 
-A satellite that needs something written sends a net event **from its client half** to a name
-the core's server half has registered. It never asks the core from its own server half — the
-runtime installs no cross-resource server bus.
+A satellite that needs something written for a player sends a net event **from its client
+half** to a name the core's server half has registered: only a net event carries the
+authenticated `source`. What the server exports above offer is the other road, for a server
+resource acting on its own authority.
 
 | Server event | Payload | Effect |
 |---|---|---|
@@ -203,7 +272,7 @@ and `inLastStand` in it. The gameplay needs — hunger, thirst, stamina, ram, st
 | File | Scope |
 |---|---|
 | `config/shared.lua` | values both sides need — never put a secret in it |
-| `config/server.lua` | slots, autosave, paychecks, entry deadlines, the selection bucket, starting metadata |
+| `config/server.lua` | slots, autosave, paychecks, entry deadlines, the selection bucket, starting metadata, who may call the server exports, and the inventory storage bounds |
 | `config/vehicles.lua` | plate format and spawn ceiling, server-only |
 | `config/client.lua` | client cadences — **never loaded by the server VM** |
 

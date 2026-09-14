@@ -1,5 +1,5 @@
 resource "opx77_core"
-version "0.3.0"
+version "0.4.0"
 open77_version ">=0.0.1"
 auto_start true
 
@@ -40,6 +40,7 @@ server_script "server/storage/main.lua"
 server_script "server/storage/schema.lua"
 server_script "server/storage/players.lua"
 server_script "server/storage/vehicles.lua"
+server_script "server/storage/inventories.lua"
 server_script "server/logger.lua" -- after storage, because it writes through it
 server_script "server/main.lua"
 server_script "server/functions.lua" -- the getters: every file below reaches for OPX.GetPlayer
@@ -53,6 +54,7 @@ server_script "server/vehicles.lua" -- after character.lua: ownership reads Play
 server_script "server/events.lua"
 server_script "server/commands.lua"
 server_script "server/loops.lua"
+server_script "server/exports.lua" -- last: publishing the surface claims everything it reads
 
 client_script "client/main.lua"
 client_script "client/functions.lua"

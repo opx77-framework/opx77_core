@@ -102,4 +102,14 @@ OPX.Locale.register("en", {
   ["error.tooFast"]          = "Slow down and try again in a moment.",
   ["error.notLoggedIn"]      = "You are not in the world yet.",
   ["error.noPermission"]     = "You are not allowed to do that.",
+
+  ["core.booting"]           = "The core is still starting. Try again in a moment.",
+  ["export.callerDenied"]    = "That resource may not ask the core for this.",
+  ["export.badArgument"]     = "The core could not read that request.",
+  ["export.tooLarge"]        = "That answer is too large to send.",
+
+  ["inventory.noOwner"]      = "Nothing owns that container.",
+  ["inventory.notFound"]     = "No such container.",
+  ["inventory.unknownToken"] = "That save was never staged, or it expired.",
+  ["inventory.saveFailed"]   = "The container could not be saved.",
 })

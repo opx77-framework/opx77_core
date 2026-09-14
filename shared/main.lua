@@ -2,7 +2,7 @@
 
 OPX = OPX or {}
 
-OPX.VERSION = "0.3.0"
+OPX.VERSION = "0.4.0"
 
 --- Read off a global only one runtime has -- both are installed by the bootstrap before any
 --- script runs. Not Open77.database: that is only installed with `database.access`.
@@ -74,6 +74,7 @@ OPX.Events = {
     GANG_UPDATE = "opx77:player:gangUpdate",
     APPEARANCE_CHANGE = "opx77:player:appearanceChange",
     PAYCHECK = "opx77:player:paycheck",
+    CHARACTER_DELETED = "opx77:player:characterDeleted",
   },
 }
 

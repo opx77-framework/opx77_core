@@ -195,3 +195,35 @@
 ---@field moneyType MoneyType|nil
 ---@field amount number|nil
 ---@field reason string|nil
+
+--- One stored stack, as the inventory storage exports hand it over and take it back.
+---@class InventoryStack
+---@field slot integer          1-based
+---@field name string           an item name of opx77_inventory's catalogue
+---@field count integer         at least 1
+---@field metadata table|nil    what makes this copy unlike another; nil for an ordinary one
+
+--- A container as the storage creates it.
+---@class InventoryEntity
+---@field kind string
+---@field owner string
+---@field citizenId string|nil   set for a character's bag
+---@field plate string|nil       set for a vehicle's trunk or glovebox
+---@field slots integer
+---@field maxWeight integer     grams
+
+--- A container row, as `InventoryEnsure` and the first page of `InventoryRead` answer it.
+---@class InventoryHeader
+---@field id integer
+---@field kind string           "character", "stash", "trunk", "glovebox", or another
+---@field owner string          the citizen id, the stash name, or the plate
+---@field slots integer         the size it was created with
+---@field maxWeight integer     grams
+
+--- One entry of the change cursor `GetChanges` reads.
+---@class CoreChange
+---@field cursor integer
+---@field kind "loaded"|"unloaded"|"deleted"
+---@field source Source|nil
+---@field citizenId CitizenId|nil
+---@field at integer            the core's clock, milliseconds

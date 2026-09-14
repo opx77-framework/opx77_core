@@ -158,6 +158,10 @@ CreateThread(function()
       "to print a coordinate in the right shape.")
   end
 
+  -- set on both branches: the server exports answer `core.booting` until the schema question
+  -- is settled, then answer, degraded or not
+  OPX.Booted = true
+
   if OPX.BootError then
     Open77.log.error(("[core] opx77_core %s is up but cannot load characters: %s")
       :format(OPX.VERSION, OPX.BootError))

@@ -94,4 +94,54 @@ CREATE TABLE IF NOT EXISTS opx77_vehicles (
       ]],
     },
   },
+
+  {
+    name = "0005_inventories",
+    file = "sql/inventories.sql",
+    statements = {
+      [[
+CREATE TABLE IF NOT EXISTS opx77_inventories (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    kind VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    owner VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NULL DEFAULT NULL,
+    plate VARCHAR(12) CHARACTER SET ascii COLLATE ascii_bin NULL DEFAULT NULL,
+    slots SMALLINT UNSIGNED NOT NULL,
+    max_weight INT UNSIGNED NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_opx77_inventories_identity (kind, owner),
+    KEY idx_opx77_inventories_citizen (citizen_id),
+    KEY idx_opx77_inventories_plate (plate),
+    CONSTRAINT fk_opx77_inventory_character
+        FOREIGN KEY (citizen_id) REFERENCES opx77_characters (citizen_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_opx77_inventory_vehicle
+        FOREIGN KEY (plate) REFERENCES opx77_vehicles (plate)
+        ON DELETE CASCADE
+) ENGINE=InnoDB
+      ]],
+    },
+  },
+
+  {
+    name = "0006_inventory_items",
+    file = "sql/inventory_items.sql",
+    statements = {
+      [[
+CREATE TABLE IF NOT EXISTS opx77_inventory_items (
+    inventory_id INT UNSIGNED NOT NULL,
+    slot SMALLINT UNSIGNED NOT NULL,
+    name VARCHAR(48) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    quantity INT UNSIGNED NOT NULL,
+    metadata JSON NULL DEFAULT NULL,
+    PRIMARY KEY (inventory_id, slot),
+    KEY idx_opx77_inventory_items_name (name),
+    CONSTRAINT fk_opx77_inventory_item_inventory
+        FOREIGN KEY (inventory_id) REFERENCES opx77_inventories (id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB
+      ]],
+    },
+  },
 }

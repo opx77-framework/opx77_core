@@ -3,6 +3,20 @@
 
 local Config = OPX.Config.SERVER
 
+--- Every command this file registers, in order, with its gate: the suggestions read it, so a
+--- command cannot be added without the chat learning whether it is restricted.
+---@type { name: string, restricted: boolean }[]
+local registered = {}
+
+--- `RegisterCommand`, remembering the name and the gate.
+---@param name string
+---@param handler fun(source: Source, args: table, raw: string)
+---@param restricted boolean
+local function register(name, handler, restricted)
+  RegisterCommand(name, handler, restricted)
+  registered[#registered + 1] = { name = name, restricted = restricted }
+end
+
 --- Console runs as source 0, which is not a player and has no character.
 ---@param source Source
 ---@param raw string
@@ -44,7 +58,7 @@ local function tooFast(source, raw, key, everyMs)
   return true
 end
 
-RegisterCommand("opx77", function(source, _, raw)
+register("opx77", function(source, _, raw)
   local players = OPX.GetPlayers()
   -- sorted, so two runs of this command can be compared line for line
   table.sort(players, function(a, b) return a.PlayerData.source < b.PlayerData.source end)
@@ -66,7 +80,7 @@ RegisterCommand("opx77", function(source, _, raw)
 end, true)
 
 --- One player's whole situation, all of it what the SERVER believes.
-RegisterCommand("opx77.where", function(source, args, raw)
+register("opx77.where", function(source, args, raw)
   local target = tonumber(args[1]) or source
   local session = OPX.Sessions[target]
   if not session then
@@ -104,7 +118,7 @@ RegisterCommand("opx77.where", function(source, args, raw)
 end, true)
 
 --- Prints the caller's position in the exact shape config/shared.lua wants.
-RegisterCommand("opx77.here", function(source, _, raw)
+register("opx77.here", function(source, _, raw)
   if source <= 0 then
     return OPX.CommandResult(source, raw, false, "opx77.here must be run in game")
   end
@@ -125,7 +139,7 @@ DEFAULT_SPAWN = {
 },]]):format(position.x, position.y, position.z, heading))
 end, true)
 
-RegisterCommand("opx77.whois", function(source, args, raw)
+register("opx77.whois", function(source, args, raw)
   local target = tonumber(args[1]) or source
   local session = OPX.Sessions[target]
   if not session then
@@ -135,7 +149,7 @@ RegisterCommand("opx77.whois", function(source, args, raw)
     ("player %d  user=%s  name=%s"):format(target, session.userId, session.displayName))
 end, true)
 
-RegisterCommand("opx77.characters", function(source, _, raw)
+register("opx77.characters", function(source, _, raw)
   if source <= 0 then
     return OPX.CommandResult(source, raw, false, locale("command.inGameOnly"))
   end
@@ -155,7 +169,7 @@ RegisterCommand("opx77.characters", function(source, _, raw)
   end)
 end, false)
 
-RegisterCommand("opx77.select", function(source, args, raw)
+register("opx77.select", function(source, args, raw)
   if source <= 0 or not args[1] then
     return OPX.CommandResult(source, raw, false, locale("command.usage.select"))
   end
@@ -169,7 +183,7 @@ RegisterCommand("opx77.select", function(source, args, raw)
   end)
 end, false)
 
-RegisterCommand("opx77.create", function(source, args, raw)
+register("opx77.create", function(source, args, raw)
   if source <= 0 or not (args[1] and args[2]) then
     return OPX.CommandResult(source, raw, false, locale("command.usage.create"))
   end
@@ -189,7 +203,7 @@ RegisterCommand("opx77.create", function(source, args, raw)
   end)
 end, false)
 
-RegisterCommand("opx77.delete", function(source, args, raw)
+register("opx77.delete", function(source, args, raw)
   if source <= 0 or not args[1] then
     return OPX.CommandResult(source, raw, false, locale("command.usage.delete"))
   end
@@ -201,7 +215,7 @@ RegisterCommand("opx77.delete", function(source, args, raw)
   end)
 end, false)
 
-RegisterCommand("opx77.duty", function(source, _, raw)
+register("opx77.duty", function(source, _, raw)
   local src = tonumber(source) or 0
   -- unrestricted, and each run costs two full-PlayerData outbound events
   if src > 0 and OPX.Cooling(src, "duty", 2000) then
@@ -217,7 +231,7 @@ RegisterCommand("opx77.duty", function(source, _, raw)
   end)
 end, false)
 
-RegisterCommand("opx77.money", function(source, args, raw)
+register("opx77.money", function(source, args, raw)
   local target = targetOf(args[1], source)
   local moneyType = args[2] and args[2]:upper()
   local amount = tonumber(args[3])
@@ -244,7 +258,7 @@ RegisterCommand("opx77.money", function(source, args, raw)
     or locale(why or "error.badRequest", { type = moneyType }))
 end, true)
 
-RegisterCommand("opx77.job", function(source, args, raw)
+register("opx77.job", function(source, args, raw)
   local target = targetOf(args[1], source)
   if not target or not args[2] then
     return OPX.CommandResult(source, raw, false,
@@ -259,7 +273,7 @@ RegisterCommand("opx77.job", function(source, args, raw)
   end)
 end, true)
 
-RegisterCommand("opx77.gang", function(source, args, raw)
+register("opx77.gang", function(source, args, raw)
   local target = targetOf(args[1], source)
   if not target or not args[2] then
     return OPX.CommandResult(source, raw, false,
@@ -274,7 +288,7 @@ RegisterCommand("opx77.gang", function(source, args, raw)
   end)
 end, true)
 
-RegisterCommand("opx77.group", function(source, args, raw)
+register("opx77.group", function(source, args, raw)
   local groupType, name = args[1], args[2]
   if groupType ~= "job" and groupType ~= "gang" or not name then
     return OPX.CommandResult(source, raw, false, "usage: opx77.group <job|gang> <name>")
@@ -295,7 +309,7 @@ RegisterCommand("opx77.group", function(source, args, raw)
 end, true)
 
 --- Writes every loaded character back right now, for the minute before a planned restart.
-RegisterCommand("opx77.save", function(source, _, raw)
+register("opx77.save", function(source, _, raw)
   CreateThread(function()
     local players = OPX.GetPlayers()
     local saved = 0
@@ -307,26 +321,106 @@ RegisterCommand("opx77.save", function(source, _, raw)
   end)
 end, true)
 
+-- ---------------------------------------------------------------------------
+-- Chat autocomplete
+-- ---------------------------------------------------------------------------
+
+local TARGET = { name = "playerId|citizenId", help = "command.param.target" }
+local PLAYER_OR_SELF = { name = "playerId", help = "command.param.playerSelf", optional = true }
+local OWN_CITIZEN = { name = "citizenId", help = "command.param.ownCitizenId" }
+local GRADE = { name = "grade", help = "command.param.grade", optional = true }
+
+--- What a player sees while typing, per command: catalogue keys, rendered when the
+--- suggestions go out. Parameters are in the order the handler reads `args`.
+local HELP = {
+  ["opx77"] = { text = "command.help.opx77" },
+  ["opx77.where"] = { text = "command.help.where", params = { PLAYER_OR_SELF } },
+  ["opx77.here"] = { text = "command.help.here" },
+  ["opx77.whois"] = { text = "command.help.whois", params = { PLAYER_OR_SELF } },
+  ["opx77.characters"] = { text = "command.help.characters" },
+  ["opx77.select"] = { text = "command.help.select", params = { OWN_CITIZEN } },
+  ["opx77.create"] = { text = "command.help.create", params = {
+    { name = "firstName", help = "command.param.name" },
+    { name = "lastName", help = "command.param.name" },
+    { name = "nomad|streetkid|corpo", help = "command.param.origin", optional = true },
+    { name = "female|male", help = "command.param.gender", optional = true },
+    { name = "YYYY-MM-DD", help = "command.param.birthDate", optional = true },
+  } },
+  ["opx77.delete"] = { text = "command.help.delete", params = { OWN_CITIZEN } },
+  ["opx77.duty"] = { text = "command.help.duty" },
+  ["opx77.money"] = { text = "command.help.money", params = {
+    TARGET,
+    { name = "TYPE", help = "command.param.moneyType" },
+    { name = "amount", help = "command.param.amount" },
+  } },
+  ["opx77.job"] = { text = "command.help.job", params = {
+    TARGET, { name = "job", help = "command.param.job" }, GRADE,
+  } },
+  ["opx77.gang"] = { text = "command.help.gang", params = {
+    TARGET, { name = "gang", help = "command.param.gang" }, GRADE,
+  } },
+  ["opx77.group"] = { text = "command.help.group", params = {
+    { name = "job|gang", help = "command.param.groupType" },
+    { name = "name", help = "command.param.groupName" },
+  } },
+  ["opx77.save"] = { text = "command.help.save" },
+}
+
+--- Whether the host's ACL grants this player `command.<name>`. False when this host has no
+--- ACL reader, so a restricted command is then suggested to nobody rather than to everybody.
+---@param player integer
+---@param name string
+---@return boolean
+local function permitted(player, name)
+  local acl = Open77.acl
+  if type(acl) ~= "table" or type(acl.isAllowed) ~= "function" then return false end
+  local read, allowed = pcall(acl.isAllowed, player, "command." .. name)
+  return read and allowed == true
+end
+
+--- The values the parameter help lines fill in, read from the config as it is now.
+---@return table<string, string|number>
+local function helpValues()
+  local shared = OPX.Config.SHARED
+  local types = {}
+  for moneyType in pairs(shared.MONEY.TYPES) do types[#types + 1] = tostring(moneyType) end
+  -- sorted: `pairs` order would reshuffle the list between two suggestions
+  table.sort(types)
+  local bounds = shared.CHARACTERS.NAME
+  return { types = table.concat(types, ", "), min = bounds.MIN, max = bounds.MAX }
+end
+
 --- Suggestions for the chat autocomplete, sent on `chat:ready`: ones sent at boot land
---- nowhere.
+--- nowhere. A restricted command goes only to a player the ACL would let run it: a
+--- suggestion is a hint in a text box, not a grant, and the staff list is nobody else's.
 RegisterNetEvent("chat:ready", function()
-  -- cooled like the rest: a net event anyone can send, answered with several hundred bytes
+  -- cooled like the rest: a net event anyone can send, answered with a few kilobytes
   local src = tonumber(source)
-  if not src then return end
+  if not src or src <= 0 then return end
   if OPX.Cooling(src, "chat_suggestions", 10000) then return end
 
-  TriggerClientEvent("chat:addSuggestions", src, {
-    { command = "/opx77.characters", help = locale("command.help.characters") },
-    { command = "/opx77.select", help = locale("command.help.select"),
-      parameters = { { name = "citizenId" } } },
-    { command = "/opx77.create", help = locale("command.help.create"),
-      parameters = {
-        { name = "firstName" }, { name = "lastName" },
-        { name = "nomad|streetkid|corpo", optional = true },
-        { name = "female|male", optional = true },
-      } },
-    { command = "/opx77.delete", help = locale("command.help.delete"),
-      parameters = { { name = "citizenId" } } },
-    { command = "/opx77.duty", help = locale("command.help.duty") },
-  })
+  local values = helpValues()
+  local suggestions = {}
+  for i = 1, #registered do
+    local command = registered[i]
+    if not command.restricted or permitted(src, command.name) then
+      local help = HELP[command.name] or {}
+      local params = help.params or {}
+      local parameters = {}
+      for position = 1, #params do
+        local parameter = params[position]
+        parameters[position] = {
+          name = parameter.name,
+          help = parameter.help and locale(parameter.help, values) or nil,
+          optional = parameter.optional == true or nil,
+        }
+      end
+      suggestions[#suggestions + 1] = {
+        command = "/" .. command.name,
+        help = help.text and locale(help.text) or "",
+        parameters = parameters,
+      }
+    end
+  end
+  TriggerClientEvent("chat:addSuggestions", src, suggestions)
 end)

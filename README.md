@@ -73,6 +73,11 @@ player uses are open and take a cooldown instead.
 | `opx77.group` | ACL — the members of a job or gang |
 | `opx77.save` | ACL — write every loaded character back now |
 
+Every one of them is offered in the chat's autocomplete with its arguments and a line of help
+for each, from `locales/`, when the chat announces itself with `chat:ready`. An ACL command is
+offered only to a player the ACL grants it, read with `Open77.acl.isAllowed` — the one reason
+the manifest declares `acl.read`. A host without that reader offers the open five alone.
+
 ## Exports
 
 Client-side, because the Open77 server runtime installs no export mechanism. A server resource

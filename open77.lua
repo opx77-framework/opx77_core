@@ -78,6 +78,11 @@ permissions {
   "players.damage.apply", -- armour is re-applied after respawn; nothing here reads it back
   "world.vehicles", -- spawning a character's own car, and writing back what happened to it
 
+  -- Open77.acl.isAllowed, read-only: a restricted command is suggested in the chat only to a
+  -- player the ACL would let run it. Nothing here grants, and no handler checks it: the host
+  -- resolves command.<name> before a handler runs.
+  "acl.read",
+
   -- Deliberately not requested: world.props, world.elevators, combat.config,
   -- players.damage.read, players.disconnect.
 }

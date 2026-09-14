@@ -71,6 +71,13 @@ RegisterNetEvent(Events.Client.APPEARANCE_UPDATE, function(snapshot)
   TriggerEvent(Local.APPEARANCE_SAVED, snapshot)
 end)
 
+--- The core stored new clothing for the live character.
+RegisterNetEvent(Events.Client.CLOTHING_UPDATE, function(record)
+  if type(record) ~= "table" then return end
+  OPX.PlayerData.clothing = record
+  TriggerEvent(Local.CLOTHING_SAVED, record)
+end)
+
 --- A refusal: which request it answers, and a code. The code is always a locale key, so a UI
 --- renders it with `locale(code)` and gets the player's language for free.
 RegisterNetEvent(Events.Client.NOTIFY, function(payload)

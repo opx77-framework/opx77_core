@@ -12,6 +12,10 @@ OPX.Locale.register("fr", {
   ["appearance.invalid"]     = "Cette apparence n'a pas pu être lue.",
   ["appearance.tooLarge"]    = "Cette apparence est trop volumineuse pour être enregistrée.",
 
+  ["clothing.invalid"]       = "Ces vêtements n'ont pas pu être lus.",
+  ["clothing.tooLarge"]      = "Ces vêtements sont trop nombreux pour être enregistrés.",
+  ["clothing.stale"]         = "Ces vêtements appartiennent à un autre personnage.",
+
   ["vehicle.notFound"]       = "Aucun véhicule ne porte cette plaque.",
   ["vehicle.limit"]          = "Ce personnage possède déjà autant de véhicules qu'il le peut.",
   ["vehicle.spawned"]        = "Véhicule {plate} sorti.",

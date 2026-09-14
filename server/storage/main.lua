@@ -100,8 +100,13 @@ function Storage.ready()
   return true, readyReason
 end
 
+--- The optional migrations that failed this run, by name. Never recorded, so the next start
+--- tries them again; what reads their tables asks here first.
+---@type table<string, boolean>
+Storage.skipped = {}
+
 --- Applies pending migrations in order, keyed by name and never by position. Stops at the
---- first failure rather than leaving a half-applied schema.
+--- first failure rather than leaving a half-applied schema, unless the migration is optional.
 ---@param migrations Migration[]
 ---@return Result  ok value is the number applied
 function Storage.migrate(migrations)
@@ -131,19 +136,30 @@ CREATE TABLE IF NOT EXISTS opx77_migrations (
       Open77.log.info(("[storage] applying migration %s"):format(migration.name))
 
       local statements = migration.statements
+      local failed = false
       for j = 1, #statements do
         local run_ = Storage.execute(statements[j])
         if not run_.ok then
-          Open77.log.error(("[storage] migration %s statement %d failed: %s")
+          if not migration.optional then
+            Open77.log.error(("[storage] migration %s statement %d failed: %s")
+              :format(migration.name, j, tostring(run_.detail)))
+            return Result.err("migration-failed", migration.name)
+          end
+          Open77.log.warn(("[storage] optional migration %s statement %d failed: %s")
             :format(migration.name, j, tostring(run_.detail)))
-          return Result.err("migration-failed", migration.name)
+          Open77.log.warn(("[storage] booting without it: %s"):format(migration.optional))
+          Storage.skipped[migration.name] = true
+          failed = true
+          break
         end
       end
 
-      local recorded = Storage.insert(
-        "INSERT INTO opx77_migrations (name) VALUES (@name)", { name = migration.name })
-      if not recorded.ok then return recorded end
-      count = count + 1
+      if not failed then
+        local recorded = Storage.insert(
+          "INSERT INTO opx77_migrations (name) VALUES (@name)", { name = migration.name })
+        if not recorded.ok then return recorded end
+        count = count + 1
+      end
     end
   end
 

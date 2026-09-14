@@ -2,7 +2,7 @@
 
 OPX = OPX or {}
 
-OPX.VERSION = "0.4.0"
+OPX.VERSION = "0.5.0"
 
 --- Read off a global only one runtime has -- both are installed by the bootstrap before any
 --- script runs. Not Open77.database: that is only installed with `database.access`.
@@ -35,6 +35,7 @@ OPX.Events = {
     JOB_UPDATE = "opx77:client:onJobUpdate",
     GANG_UPDATE = "opx77:client:onGangUpdate",
     APPEARANCE_UPDATE = "opx77:client:onAppearanceUpdate",
+    CLOTHING_UPDATE = "opx77:client:onClothingUpdate",
     NOTIFY = "opx77:client:notify",
     ANSWER = "opx77:client:commandAnswer",
   },
@@ -47,6 +48,7 @@ OPX.Events = {
     DELETE_CHARACTER = "opx77:server:deleteCharacter",
     REPORT_POSITION = "opx77:server:reportPosition",
     SAVE_APPEARANCE = "opx77:server:saveAppearance",
+    SAVE_CLOTHING = "opx77:server:saveClothing",
     SPAWN_VEHICLE = "opx77:server:spawnVehicle",
     STORE_VEHICLE = "opx77:server:storeVehicle",
   },
@@ -62,6 +64,7 @@ OPX.Events = {
     JOB_CHANGED = "opx77:client:jobChanged",
     GANG_CHANGED = "opx77:client:gangChanged",
     APPEARANCE_SAVED = "opx77:client:appearanceSaved",
+    CLOTHING_SAVED = "opx77:client:clothingSaved",
     REFUSED = "opx77:client:refused",
   },
 
@@ -73,6 +76,7 @@ OPX.Events = {
     JOB_UPDATE = "opx77:player:jobUpdate",
     GANG_UPDATE = "opx77:player:gangUpdate",
     APPEARANCE_CHANGE = "opx77:player:appearanceChange",
+    CLOTHING_CHANGE = "opx77:player:clothingChange",
     PAYCHECK = "opx77:player:paycheck",
     CHARACTER_DELETED = "opx77:player:characterDeleted",
   },
@@ -87,6 +91,7 @@ OPX.Operations = {
   CREATE_CHARACTER = "createCharacter",
   DELETE_CHARACTER = "deleteCharacter",
   SAVE_APPEARANCE = "saveAppearance",
+  SAVE_CLOTHING = "saveClothing",
   SPAWN_VEHICLE = "spawnVehicle",
   STORE_VEHICLE = "storeVehicle",
 }

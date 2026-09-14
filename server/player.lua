@@ -407,10 +407,14 @@ function OPX.Login(source, citizenId)
   local groups = OPX.Storage.Players.fetchGroups(citizenId)
   if not groups.ok then return groups end
 
+  -- never refuses the login: an unreadable row is nil, and nil is dressed and saved by nobody
+  local clothing = OPX.Clothing.load(citizenId)
+
   entity.source = source
   local player = OPX.CreatePlayer(entity, false)
   player.PlayerData.jobs = groups.value.jobs
   player.PlayerData.gangs = groups.value.gangs
+  player.PlayerData.clothing = clothing
 
   OPX.RegisterPlayer(player)
   session.citizenId = citizenId

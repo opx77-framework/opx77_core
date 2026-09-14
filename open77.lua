@@ -1,5 +1,5 @@
 resource "opx77_core"
-version "0.4.0"
+version "0.5.0"
 open77_version ">=0.0.1"
 auto_start true
 
@@ -50,6 +50,7 @@ server_script "server/groups.lua" -- after player.lua: a group change writes thr
 server_script "server/character.lua"
 server_script "server/lifecycle.lua" -- after character.lua: the gate releases by loading one
 server_script "server/appearance.lua" -- after character.lua: it writes a character column
+server_script "server/clothing.lua" -- after storage: it writes the clothing table
 server_script "server/vehicles.lua" -- after character.lua: ownership reads PlayerData
 server_script "server/events.lua"
 server_script "server/commands.lua"

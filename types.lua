@@ -46,6 +46,7 @@
 ---@field position Position|nil    nil until the character has been somewhere
 ---@field metadata PlayerMetadata
 ---@field appearance AppearanceSnapshot|nil  nil until a face has been captured
+---@field clothing ClothingRecord|false|nil  false when none is stored, nil when it was not read
 ---@field lastLoggedOut string|nil
 ---@field reportedHeading number|nil  the client's hint, never authoritative
 
@@ -79,6 +80,22 @@
 ---@field name string   an option hash, "0x" and 16 lower-case hex digits, never zero
 ---@field value integer the chosen index, 0 to 511 and below `choices` when that is non-zero
 ---@field choices integer  how many the catalogue offers, 0 to 512
+
+--- What a character wears, `opx77_character_clothing.clothing`. Canonical form only:
+--- server/clothing.lua refuses anything else. The platform's own record shape.
+---@class ClothingRecord
+---@field schemaVersion integer  1
+---@field equipment table<ClothingSlot, string|false>  all nine slots: a record name, or false
+---@field wardrobe ClothingWardrobe
+
+---@class ClothingWardrobe
+---@field active integer|nil  the outfit shown, 0 to 6; nil for the worn set
+---@field outfits table<string, table<ClothingSlot, string|false>>  "0" to "6", never empty:
+---        a record overrides the slot, false hides it, and an absent slot shows what is worn.
+---        Underwear is never overridden
+
+---@alias ClothingSlot "Head"|"Face"|"InnerChest"|"OuterChest"|"Legs"|"Feet"|"Outfit"
+---| "UnderwearTop"|"UnderwearBottom"
 
 --- x, y and z come from `Open77.players.position`; `heading` is the one client-supplied field.
 --- A `bucket` in the selection range is never placed into: `OPX.Buckets.placementOf` reads it
@@ -187,6 +204,7 @@
 ---@field name string
 ---@field file string       the `sql/` file carrying the same statements, for an operator
 ---@field statements string[]
+---@field optional string|nil  set when a failure must not stop the boot: what goes without it
 
 --- Returning false from a hook vetoes the operation; returning nothing allows it. Points the
 --- core triggers: money:beforeAdd, money:beforeRemove, money:beforeSet, paycheck:before.

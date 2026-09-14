@@ -12,6 +12,10 @@ OPX.Locale.register("en", {
   ["appearance.invalid"]     = "That appearance could not be read.",
   ["appearance.tooLarge"]    = "That appearance is too large to store.",
 
+  ["clothing.invalid"]       = "Those clothes could not be read.",
+  ["clothing.tooLarge"]      = "Those clothes are too many to store.",
+  ["clothing.stale"]         = "Those clothes belong to another character.",
+
   ["vehicle.notFound"]       = "No vehicle carries that plate.",
   ["vehicle.limit"]          = "This character owns as many vehicles as it may.",
   ["vehicle.spawned"]        = "Vehicle {plate} brought out.",

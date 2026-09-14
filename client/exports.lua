@@ -40,6 +40,14 @@ exports("GetAppearance", function()
   return { ok = true, appearance = OPX.GetAppearance() }
 end)
 
+--- What the live character wears as stored, mirrored: a record, false for none stored, or nil
+--- when the core could not read it.
+---@return { ok: boolean, clothing?: ClothingRecord|false, error?: string }
+exports("GetClothing", function()
+  if not OPX.IsLoggedIn then return { ok = false, error = "error.notLoggedIn" } end
+  return { ok = true, clothing = OPX.GetClothing() }
+end)
+
 -- The selection screen's API. Everything below is a request: the return value says only that
 -- it was sent, and the answer arrives on `OPX.Events.Local.PLAYER_LOADED` or `.REFUSED`.
 

@@ -144,4 +144,24 @@ CREATE TABLE IF NOT EXISTS opx77_inventory_items (
       ]],
     },
   },
+
+  {
+    name = "0007_character_clothing",
+    file = "sql/character_clothing.sql",
+    statements = {
+      [[
+CREATE TABLE IF NOT EXISTS opx77_character_clothing (
+    citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+    clothing JSON NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_opx77_character_clothing_character
+        FOREIGN KEY (citizen_id) REFERENCES opx77_characters (citizen_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB
+      ]],
+    },
+    -- A look is not worth locking every player out for: a failure is logged with this line and
+    -- retried at the next start, and nothing else refuses to boot.
+    optional = "clothing is neither restored nor saved until it is applied",
+  },
 }

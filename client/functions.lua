@@ -88,6 +88,13 @@ function OPX.GetAppearance()
   return OPX.PlayerData.appearance
 end
 
+--- What the live character wears as stored: a record, false for none stored, or nil when the
+--- core could not read it or stores no clothing.
+---@return ClothingRecord|false|nil
+function OPX.GetClothing()
+  return OPX.PlayerData.clothing
+end
+
 --- The local player's position, flattened so the wire format and the shared math helpers see
 --- one shape. `Open77.character.position()` answers three numbers, not a table.
 ---@return Vector3Like|nil

@@ -196,6 +196,35 @@ UPDATE opx77_characters
   })
 end
 
+--- What a character wears, as stored. Ownership and deletion are the caller's checks.
+---@param citizenId CitizenId
+---@return Result  ok value is the decoded document, or nil when none is stored; err
+---        `clothing-unreadable` for a row whose JSON does not decode, which is not "none"
+function Players.fetchClothing(citizenId)
+  local row = Storage.single([[
+SELECT clothing FROM opx77_character_clothing
+ WHERE citizen_id = @citizen
+ LIMIT 1
+  ]], { citizen = citizenId })
+  if not row.ok then return row end
+  if not row.value then return Result.ok(nil) end
+  local decoded = decode(row.value.clothing, nil)
+  if decoded == nil then return Result.err("clothing-unreadable", citizenId) end
+  return Result.ok(decoded)
+end
+
+--- Writes what a character wears, the moment it is saved rather than at the next autosave.
+---@param citizenId CitizenId
+---@param encoded string a canonical record, already validated and encoded
+---@return Result
+function Players.saveClothing(citizenId, encoded)
+  return Storage.execute([[
+INSERT INTO opx77_character_clothing (citizen_id, clothing)
+VALUES (@citizen, @clothing)
+ON DUPLICATE KEY UPDATE clothing = VALUES(clothing)
+  ]], { citizen = citizenId, clothing = encoded })
+end
+
 --- How many rows this account has ever owned, soft-deleted ones included: the one read in the
 --- core that does not filter `deleted_at`, and what bounds create-delete-create.
 ---@param userId UserId

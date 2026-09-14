@@ -17,6 +17,7 @@ and reacts; it does not persist anything of its own and does not own a table.
 - Character creation, selection and deletion, with a per-account slot limit
 - Multi-job and multi-gang membership, with grades and duty state
 - Money, metadata, appearance and stored position, autosaved and written on departure
+- The clothing a character wears, written when it changes and put back on at the next login
 - Readiness-gate integration, so nothing places a player before the core has chosen where
 - A routing bucket of their own for every player without a character, so nobody choosing one
   sees or is seen by anybody else
@@ -37,6 +38,7 @@ One file per table in [`sql/`](sql/), which is where an operator reads it:
 | `sql/vehicles.sql` | `opx77_vehicles` — owned vehicles, keyed on the plate |
 | `sql/inventories.sql` | `opx77_inventories` — one container: a bag, a stash, a vehicle's trunk or glovebox |
 | `sql/inventory_items.sql` | `opx77_inventory_items` — one item stack in one slot of one container |
+| `sql/character_clothing.sql` | `opx77_character_clothing` — what one character wears |
 
 `server/storage/schema.lua` carries the same statements and applies them at boot. **The two
 are edited together.** The Open77 *server* runtime installs no file-reading API — `Open77.resource`
@@ -47,6 +49,10 @@ The runner keys on the migration name and skips one a database already has. `sql
 long strings are byte-identical apart from the trailing `;` and the file's header comment:
 `schema.lua` is what runs, `sql/` is what an operator reads, and neither is generated from the
 other. `python3 tools/check_sql_parity.py` proves it and exits non-zero when the two drift.
+
+A migration marked `optional` does not stop the boot when it fails: the runner logs the failure
+and what goes without it, does not record it, and tries it again at the next start. Only
+`0007_character_clothing` is optional — a look is not worth locking every player out for.
 
 `opx77_characters` carries one nullable JSON column beyond the obvious ones: `appearance`, the
 character's face, written only by `server/appearance.lua`. It travels inside `PlayerData` and is
@@ -61,6 +67,15 @@ deleted. A stash has neither column and stands alone. `slots` and `max_weight` (
 size a container was created with. Every stack is one row keyed on `(inventory_id, slot)`, and a
 save rewrites a container's rows in one transaction. The core touches these tables only through
 the storage exports below; see `opx77_inventory` for everything they mean.
+
+`opx77_character_clothing` holds one JSON document per character, written only by
+`server/clothing.lua`: the nine equipment slots, the seven wardrobe outfits and the active one,
+in the shape the platform's own presentation service stores. It is a table of its own rather
+than a column beside `appearance`, so a database without it still loads every character and the
+autosave that rewrites a character row never rewrites what it wears. It is read at login into
+`PlayerData.clothing` — the record, `false` when none is stored, or absent when it could not be
+read, which nothing dresses or overwrites. A character's delete is soft, so its row stays; the
+foreign key cascades when the character row is really deleted.
 
 **A database from before this version cannot be upgraded in place.** The table renames
 (`opx77_accounts` → `opx77_users`, `opx77_players` → `opx77_characters`,
@@ -119,6 +134,7 @@ For client resources. There is no `exports.<resource>:<name>()` proxy — the ca
 | `HasJob(name, onDutyOnly?, minGrade?)` | job membership, with an optional duty flag and minimum grade |
 | `HasGang(name, minGrade?)` | gang membership, with an optional minimum grade — no duty flag, a gang has no shifts |
 | `GetAppearance` | the stored face for the live character, or nil |
+| `GetClothing` | the stored clothing for the live character: a record, `false` for none stored, or nil |
 | `GetJobs` / `GetGangs` / `GetOrigins` | the static definitions, with grades as a 1-based array carrying an explicit `level` |
 | `GetVersion` | the core's version, for a compatibility check |
 | `GetSharedConfig` | server name, locale in force, money types and default, character name bounds, notification position |
@@ -209,16 +225,17 @@ local event bus is host-wide, so it reaches any resource.
 | `opx77:client:moneyChanged` | a balance moved |
 | `opx77:client:jobChanged` / `opx77:client:gangChanged` | a group or grade changed |
 | `opx77:client:appearanceSaved` | the core stored a new face; carries the snapshot |
+| `opx77:client:clothingSaved` | the core stored new clothing; carries the record |
 | `opx77:client:refused` | the server refused something: `(code, kind, operation)` |
 
 ### Refusals
 
 `opx77:client:refused` carries three arguments — a `code`, a `kind`, and the `operation` the
 refusal answers. The `operation` is one of `OPX.Operations` (`entry`, `ready`,
-`selectCharacter`, `createCharacter`, `deleteCharacter`, `saveAppearance`, `spawnVehicle`,
-`storeVehicle`), named after the `opx77:server:*` request that starts it. A client waiting on
-one of several requests must branch on it: `error.tooFast` is raised by all of them, and
-without the operation a satellite cannot tell whose answer arrived. A handler that only reads
+`selectCharacter`, `createCharacter`, `deleteCharacter`, `saveAppearance`, `saveClothing`,
+`spawnVehicle`, `storeVehicle`), named after the `opx77:server:*` request that starts it. A
+client waiting on one of several requests must branch on it: `error.tooFast` is raised by all of
+them, and without the operation a satellite cannot tell whose answer arrived. A handler that only reads
 `code` keeps working — the field was added after `code` and `kind`.
 
 The `code` is always a key the core's catalogue carries. A refusal whose underlying cause has
@@ -241,12 +258,24 @@ resource acting on its own authority.
 | `opx77:server:deleteCharacter` | `{ citizenId }` | soft-deletes one |
 | `opx77:server:reportPosition` | `{ heading }` | a heading hint; x/y/z are re-derived server-side |
 | `opx77:server:saveAppearance` | `{ snapshot }` | validates and stores a captured face |
+| `opx77:server:saveClothing` | `{ citizenId, clothing }` | validates and stores what the character wears |
 | `opx77:server:spawnVehicle` / `opx77:server:storeVehicle` | `{ plate }` | brings a car out, or puts it away |
 
 `opx77:server:saveAppearance` takes a canonical snapshot: `schemaVersion = 1`, a `gameBuild`
 listed in `APPEARANCE.GAME_BUILDS`, a 64-hex `catalogDigest`, a `gender` engine hash
 (`0x` + 16 hex), and a dense `options` array of 1–256 `{ part, name, value, choices }` entries.
 Anything else is refused with `appearance.invalid` and a code naming the field.
+
+`opx77:server:saveClothing` takes `clothing = { schemaVersion = 1, equipment, wardrobe }`:
+`equipment` names only the nine slots (`Head`, `Face`, `InnerChest`, `OuterChest`, `Legs`,
+`Feet`, `Outfit`, `UnderwearTop`, `UnderwearBottom`), each a record name of 1–160 letters,
+digits, `_`, `.` or `-`, or `false`; `wardrobe` is `{ active, outfits }`, `active` an integer 0–6
+or absent, `outfits` at most seven keyed `0`–`6`, each overriding only the seven visible slots.
+Anything else is refused with `clothing.invalid`, a document over 16 KiB encoded with
+`clothing.tooLarge`. The row written is the connection's character: `citizenId` never selects
+it, and a save naming another one — captured before a character switch — is refused with
+`clothing.stale`. A character whose stored clothing could not be read at login answers
+`error.unavailable` rather than overwriting it unseen. The cooldown is 2000 ms, on its own key.
 
 ## For a server plug-in
 
@@ -260,6 +289,7 @@ directly:
 | `OPX.SetMetadata` / `GetMetadata` | free-form character state |
 | `OPX.SetJob` / `SetGang` / `AddPlayerToJob` / `RemovePlayerFromJob` and the gang equivalents | memberships |
 | `OPX.SaveAppearance` / `GetAppearance` | the character's face |
+| `OPX.SaveClothing` / `GetClothing` | what the character wears |
 | `OPX.Storage.Players.*` | the statements, if a plug-in genuinely needs its own read |
 | `OPX.Hooks.register` | veto a money movement or a paycheck before it lands |
 

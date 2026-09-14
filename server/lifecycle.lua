@@ -78,6 +78,16 @@ function Lifecycle.release(source, note)
   Open77.log.debug(("[lifecycle] gate released for %d (%s)"):format(source, note or "done"))
 end
 
+--- Whether the gate has opened for this player this session. A server with no gate reads as
+--- open, and so does an id the host raises on.
+---@param source Source
+---@return boolean
+function Lifecycle.isReady(source)
+  if not HAS_GATE or type(Open77.ready.isReady) ~= "function" then return true end
+  local read, open = pcall(Open77.ready.isReady, source)
+  return not read or open == true
+end
+
 --- Everything the core does for a player who has just connected. On its own thread because it
 --- reads the database, and every failure path releases the gate rather than leaving them held.
 ---@param source Source
@@ -90,6 +100,11 @@ function Lifecycle.beginEntry(source)
   end
 
   Lifecycle.hold(source, "opx77_character_selection")
+
+  -- under the closed gate on purpose: a bucket move writes no transform and no life state, and
+  -- taken now nobody else is ever replicated to the world this player is about to load. A
+  -- refusal this early is taken again at the client's READY
+  OPX.Buckets.isolate(source, "joined")
 
   CreateThread(function()
     local sent = OPX.SendCharacters(source, true)

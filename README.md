@@ -18,6 +18,8 @@ and reacts; it does not persist anything of its own and does not own a table.
 - Multi-job and multi-gang membership, with grades and duty state
 - Money, metadata, appearance and stored position, autosaved and written on departure
 - Readiness-gate integration, so nothing places a player before the core has chosen where
+- A routing bucket of their own for every player without a character, so nobody choosing one
+  sees or is seen by anybody else
 - Live tunables, editable from the operator panel without a restart
 - Export-based API to read core data from any client resource
 - Locales, with every refusal answered as a key a satellite can render
@@ -190,7 +192,7 @@ and `inLastStand` in it. The gameplay needs — hunger, thirst, stamina, ram, st
 | File | Scope |
 |---|---|
 | `config/shared.lua` | values both sides need — never put a secret in it |
-| `config/server.lua` | slots, autosave, paychecks, entry deadlines, starting metadata |
+| `config/server.lua` | slots, autosave, paychecks, entry deadlines, the selection bucket, starting metadata |
 | `config/vehicles.lua` | plate format and spawn ceiling, server-only |
 | `config/client.lua` | client cadences — **never loaded by the server VM** |
 
@@ -215,6 +217,53 @@ gives up first and can say why.
 Every joiner is also held by the platform's own `__platform` hold, which clears only when some
 client emits `open77:session:gameplayReady`. With no resource emitting it, `Open77.ready.isReady`
 stays false and `onPlayerReady` never fires. The core reads neither, so it is unaffected.
+
+### The selection bucket
+
+A player with no character loaded waits in a routing bucket of their own, `ENTRY.BUCKET.BASE`
+plus their player id (77001 for player 1 as shipped), with ambient population off and the
+entity lockdown `relaxed`, as the platform prepares its own isolated rounds. Nobody else is
+replicated to them and they are replicated to nobody, so two players on the roster at the same
+spot never see each other. `server/buckets.lua`; every move is one `[bucket]` debug line.
+
+| When | Bucket |
+|---|---|
+| the player connects | their own, at once. Taken again at their client's `READY` if refused |
+| a character is selected | `WORLD` or the stored bucket, set just before the kill → respawn, which names the same one |
+| the character could not be placed | `WORLD` all the same: it is loaded, and plays where it stands |
+| the character is unloaded (logout, deletion of the loaded one) | their own again; the position is sampled before the move, so the row keeps the world bucket |
+| a switch from one character to another | no move: the player never goes back to the roster, unless the switch fails after the first character was torn down |
+| the player disconnects | none: the host drops the player and their bucket with them |
+| `opx77_core` stops | everybody in a selection bucket goes to `WORLD`, so nobody is left where no running resource looks |
+| `opx77_core` starts again | a player still behind the readiness gate is isolated again at their `READY`. One past it has been in the world this session and stays in `WORLD` |
+
+A stored position whose bucket is in the selection range, `BASE + 1` to `BASE + 65535`, is
+placed in `WORLD`: that bucket belongs to whoever holds the player id now, never to a character.
+It happens to a staff member who teleports to a player on the roster and saves there.
+
+**A bucket move under the closed gate.** The gate's rule is never to teleport, spawn, kill or
+force a respawn on a player whose gate is closed, because acting on the body of a client that is
+not incarnated crashes it. A bucket move is none of those: the host's `setPlayer` "moves
+authoritative visibility scope" — which bodies, vehicles and props are replicated to and from
+the player — and writes no transform, life state or puppet. The platform's own resources treat
+it that way: `open77_appearance` replays bodies on `onPlayerBucketChange` with no life or gate
+check, and no bucket refusal in the host names readiness. So the core moves a player at connect,
+before their world has loaded, which is also the only moment at which nothing from the shared
+world has been replicated to them yet.
+
+The routing bucket API needs no manifest permission. `ISOLATE = false` turns it all off.
+
+**Other resources.** `opx77_elevators` answers `wrong_bucket` to a player outside its lift's
+bucket, and `opx77_animations` plays and replicates within a bucket, which is the point: neither
+is reachable from the roster. `opx77_admin`'s `goto`, `bring` and `observe` place through
+kill → respawn into the target's bucket, and refuse a target whose readiness gate is closed —
+every player on the roster for the first time. A player back on the roster after an unload has an
+open gate, so `goto` puts the staff member in that player's selection bucket, and `bring` takes
+the player into the staff member's. Neither is undone by the core; the next selection places the
+character in the world as usual.
+
+The face editor of a character with no stored face opens after the character is placed, so it
+opens in `WORLD`.
 
 ### Placement conflicts
 

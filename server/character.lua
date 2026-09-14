@@ -304,8 +304,10 @@ function OPX.PlaceCharacter(player)
       allowSampling(player)
       return false, "no-default-spawn"
     end
-    target = { x = spawn.X, y = spawn.Y, z = spawn.Z, heading = spawn.HEADING, bucket = 0 }
+    target = { x = spawn.X, y = spawn.Y, z = spawn.Z, heading = spawn.HEADING }
   end
+  -- never a selection bucket: that one belongs to whoever holds a player id, not to a character
+  local bucket = OPX.Buckets.placementOf(target.bucket)
 
   -- five looks over a second: the gate has not opened yet, so this poll is the whole of what
   -- stands between placement and a player mid-transition
@@ -319,6 +321,11 @@ function OPX.PlaceCharacter(player)
     return false, "life-state-" .. tostring(life and life.phase or "unknown")
   end
 
+  -- out of the selection bucket before the kill, as the platform's own gamemodes move a player
+  -- before placing them: the respawn below names the same bucket, and nothing replicated from
+  -- the selection bucket is left for it to carry over
+  OPX.Buckets.move(source, bucket, "placement")
+
   local killed, killError = Open77.players.kill(source, {
     cause = "script",
     weapon = "opx77_core:placement",
@@ -330,7 +337,7 @@ function OPX.PlaceCharacter(player)
   local respawned, respawnError = Open77.players.respawn(source, {
     position = { x = target.x, y = target.y, z = target.z },
     heading = target.heading or 0.0,
-    bucket = target.bucket or 0,
+    bucket = bucket,
     health = OPX.Math.clamp(health / 100, 0.15, 1.0),
     graceMs = 5000,
   })
@@ -401,13 +408,17 @@ function OPX.SelectCharacter(source, citizenId)
     if saved and saved.ok == false then
       Open77.log.error(("[character] refusing the switch: %s could not be saved (%s)")
         :format(current.PlayerData.citizenId, tostring(saved.error)))
+      -- the character is already unloaded, so the player is choosing again
+      OPX.Buckets.isolate(source, "switch-refused")
       return Result.err("error.unavailable", tostring(saved.error))
     end
   end
 
   local login = OPX.Login(source, parsed.value)
   if not login.ok then
-    -- NOT released here: that puts the player in the world with no character loaded
+    -- NOT released here: that puts the player in the world with no character loaded. A switch
+    -- that tore the last character down leaves them choosing, so out of the world as well
+    if current then OPX.Buckets.isolate(source, "switch-refused") end
     return login
   end
 
@@ -416,6 +427,9 @@ function OPX.SelectCharacter(source, citizenId)
     Open77.log.warn(("[character] %s logged in but was not placed: %s")
       :format(parsed.value, tostring(reason)))
   end
+  -- a character is loaded either way: one that could not be placed plays where it stands, in
+  -- the world and not alone in a selection bucket
+  OPX.Buckets.release(source, placed and "character-placed" or "character-loaded")
 
   OPX.Lifecycle.release(source, placed and "character-placed" or "character-loaded")
   return login

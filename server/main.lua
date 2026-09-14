@@ -77,6 +77,9 @@ end
 ---@param playerId Source
 function OPX.ForgetSession(playerId)
   local player = OPX.Players[playerId]
+  local session = OPX.Sessions[playerId]
+  -- before the logout: the slot may already belong to somebody else, who must not be moved
+  if session then session.departing = true end
   if player then
     -- the slot may already belong to somebody else, and the save samples by source
     player.MaySample = false

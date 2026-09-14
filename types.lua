@@ -81,6 +81,8 @@
 ---@field choices integer  how many the catalogue offers, 0 to 512
 
 --- x, y and z come from `Open77.players.position`; `heading` is the one client-supplied field.
+--- A `bucket` in the selection range is never placed into: `OPX.Buckets.placementOf` reads it
+--- as `ENTRY.BUCKET.WORLD`.
 ---@class Position
 ---@field x number
 ---@field y number
@@ -142,6 +144,7 @@
 ---@field citizenId CitizenId|nil set once a character is loaded
 ---@field charactersSent boolean
 ---@field released boolean|nil
+---@field departing boolean|nil   set on disconnect or eviction, so the slot is moved no more
 
 --- The trimmed shape sent to a client for the selection screen. Money, metadata, appearance
 --- and stored position are deliberately absent.

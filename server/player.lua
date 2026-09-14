@@ -462,6 +462,12 @@ function OPX.Logout(source)
   TriggerClientEvent(OPX.Events.Client.PLAYER_UNLOADED, source)
   TriggerEvent(OPX.Events.Internal.PLAYER_UNLOADED, source, player.PlayerData)
 
+  -- sampled now and not in the save: the move below would have it store the selection bucket
+  OPX.SamplePosition(player)
+  player.MaySample = false
+  -- back to the selection screen, so back out of the world; refused for a player leaving
+  OPX.Buckets.isolate(source, "unloaded")
+
   CreateThread(function()
     OPX.Save(player, true)
     OPX.Logger.player(player, "character.logout", "logged out")

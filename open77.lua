@@ -43,6 +43,7 @@ server_script "server/storage/vehicles.lua"
 server_script "server/logger.lua" -- after storage, because it writes through it
 server_script "server/main.lua"
 server_script "server/functions.lua" -- the getters: every file below reaches for OPX.GetPlayer
+server_script "server/buckets.lua" -- before player.lua: a logout and a placement move buckets
 server_script "server/player.lua"
 server_script "server/groups.lua" -- after player.lua: a group change writes through the Player
 server_script "server/character.lua"
@@ -85,4 +86,7 @@ permissions {
 
   -- Deliberately not requested: world.props, world.elevators, combat.config,
   -- players.damage.read, players.disconnect.
+
+  -- Nothing to request: `Open77.routingBuckets`, which keeps a player choosing a character in
+  -- a bucket of their own, is installed for every server resource and has no permission.
 }

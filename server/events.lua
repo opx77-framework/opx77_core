@@ -20,6 +20,10 @@ local forgetThrottle -- forward-declared: defined below, used by the handler abo
 local function departed(source)
   source = tonumber(source)
   if not source then return end
+  -- before the logout: a player on the way out is not put back in a selection bucket, and the
+  -- host drops a departed player's bucket by itself
+  local session = OPX.Sessions[source]
+  if session then session.departing = true end
   OPX.Logout(source)
   OPX.ForgetSession(source)
   forgetThrottle(source)
@@ -78,6 +82,11 @@ RegisterNetEvent(Events.Server.READY, function()
     TriggerClientEvent(Events.Client.PLAYER_LOADED, src, player.PlayerData)
     return
   end
+
+  -- a join whose move was refused on connect, or a player still behind the gate when this VM
+  -- was reloaded. Somebody past the gate has been in the world this session and is left where
+  -- they are: after a reload that is everybody who was playing
+  if not OPX.Lifecycle.isReady(src) then OPX.Buckets.isolate(src, "ready") end
 
   CreateThread(function() OPX.SendCharacters(src) end)
 end)

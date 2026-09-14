@@ -40,6 +40,26 @@ OPX.Config.SERVER = {
     -- the core's own deadline for the whole join sequence, in ms. Below GATE_MS so the core
     -- gives up first and can say why. Also the ceiling of the SELECTION_MS tunable.
     PIPELINE_MS = 240000,
+
+    -- the routing bucket a player waits in while no character is loaded: from connect, and
+    -- again after an unload, until a character is placed. See README, "The selection bucket".
+    BUCKET = {
+      -- one bucket per player, so nobody choosing sees or is seen by anybody. false leaves
+      -- everybody in WORLD and moves nobody
+      ISOLATE = true,
+
+      -- a player's own bucket is BASE + their player id, up to BASE + 65535. Keep that range
+      -- clear of every other resource's buckets: the platform's Deathmatch uses 4100-4287 and
+      -- its Race 6500
+      BASE = 77000,
+
+      -- where a character goes when its stored position names no bucket, or names one in the
+      -- selection range; the shared world is 0
+      WORLD = 0,
+
+      POPULATION = false, -- ambient population in a selection bucket
+      LOCKDOWN = "relaxed", -- inactive, relaxed, strict or full; false leaves the mode alone
+    },
   },
 
   PLAYER = {

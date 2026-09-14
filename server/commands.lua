@@ -24,7 +24,7 @@ end
 local function requirePlayer(source, raw)
   local player = OPX.GetPlayer(source)
   if not player then
-    OPX.CommandResult(source, raw, false, locale("error.notLoggedIn"))
+    OPX.CommandNotice(source, raw, "error", locale("error.notLoggedIn"))
     return nil
   end
   return player
@@ -54,7 +54,7 @@ end
 ---@return boolean refused true when the caller has already been answered
 local function tooFast(source, raw, key, everyMs)
   if not OPX.Cooling(source, key, everyMs) then return false end
-  OPX.CommandResult(source, raw, false, locale("error.tooFast"))
+  OPX.CommandNotice(source, raw, "warning", locale("error.tooFast"))
   return true
 end
 
@@ -84,7 +84,7 @@ register("opx77.where", function(source, args, raw)
   local target = tonumber(args[1]) or source
   local session = OPX.Sessions[target]
   if not session then
-    return OPX.CommandResult(source, raw, false, ("player %s has no session"):format(target))
+    return OPX.CommandNotice(source, raw, "warning", locale("command.noSession", { id = target }))
   end
 
   local player = OPX.GetPlayer(target)
@@ -124,7 +124,7 @@ register("opx77.here", function(source, _, raw)
   end
   local position = Open77.players.position(source)
   if not position then
-    return OPX.CommandResult(source, raw, false, "your position is not readable right now")
+    return OPX.CommandNotice(source, raw, "error", locale("command.positionUnreadable"))
   end
 
   local player = OPX.GetPlayer(source)
@@ -143,7 +143,7 @@ register("opx77.whois", function(source, args, raw)
   local target = tonumber(args[1]) or source
   local session = OPX.Sessions[target]
   if not session then
-    return OPX.CommandResult(source, raw, false, ("player %s has no session"):format(target))
+    return OPX.CommandNotice(source, raw, "warning", locale("command.noSession", { id = target }))
   end
   OPX.CommandResult(source, raw, true,
     ("player %d  user=%s  name=%s"):format(target, session.userId, session.displayName))
@@ -151,13 +151,13 @@ end, true)
 
 register("opx77.characters", function(source, _, raw)
   if source <= 0 then
-    return OPX.CommandResult(source, raw, false, locale("command.inGameOnly"))
+    return OPX.CommandNotice(source, raw, "error", locale("command.inGameOnly"))
   end
   if tooFast(source, raw, "ready", 2000) then return end
   CreateThread(function()
     local sent = OPX.SendCharacters(source)
     if not sent.ok then
-      return OPX.CommandResult(source, raw, false, locale(OPX.RefusalKey(sent.error)))
+      return OPX.CommandNotice(source, raw, "error", locale(OPX.RefusalKey(sent.error)))
     end
     local lines = { locale("command.characterCount", { count = #sent.value }) }
     for i = 1, #sent.value do
@@ -171,12 +171,12 @@ end, false)
 
 register("opx77.select", function(source, args, raw)
   if source <= 0 or not args[1] then
-    return OPX.CommandResult(source, raw, false, locale("command.usage.select"))
+    return OPX.CommandNotice(source, raw, "warning", locale("command.usage.select"))
   end
   if tooFast(source, raw, "select.request", 1000) then return end
   CreateThread(function()
     local selected = OPX.SelectCharacter(source, args[1])
-    OPX.CommandResult(source, raw, selected.ok,
+    OPX.CommandNotice(source, raw, selected.ok and "success" or "error",
       selected.ok and locale("command.entered",
         { citizenId = selected.value.PlayerData.citizenId })
         or locale(OPX.RefusalKey(selected.error)))
@@ -185,7 +185,7 @@ end, false)
 
 register("opx77.create", function(source, args, raw)
   if source <= 0 or not (args[1] and args[2]) then
-    return OPX.CommandResult(source, raw, false, locale("command.usage.create"))
+    return OPX.CommandNotice(source, raw, "warning", locale("command.usage.create"))
   end
   if tooFast(source, raw, "create.request", 1000) then return end
   CreateThread(function()
@@ -197,7 +197,7 @@ register("opx77.create", function(source, args, raw)
       birthDate = args[5],
     })
     -- the locale line only: this command is UNRESTRICTED and `detail` can be a raw exception
-    OPX.CommandResult(source, raw, created.ok,
+    OPX.CommandNotice(source, raw, created.ok and "success" or "error",
       created.ok and locale("character.created", { citizenId = created.value.citizenId })
         or locale(OPX.RefusalKey(created.error)))
   end)
@@ -205,12 +205,12 @@ end, false)
 
 register("opx77.delete", function(source, args, raw)
   if source <= 0 or not args[1] then
-    return OPX.CommandResult(source, raw, false, locale("command.usage.delete"))
+    return OPX.CommandNotice(source, raw, "warning", locale("command.usage.delete"))
   end
   if tooFast(source, raw, "delete.request", 1000) then return end
   CreateThread(function()
     local deleted = OPX.DeleteCharacter(source, args[1])
-    OPX.CommandResult(source, raw, deleted.ok,
+    OPX.CommandNotice(source, raw, deleted.ok and "success" or "error",
       deleted.ok and locale("character.deleted") or locale(OPX.RefusalKey(deleted.error)))
   end)
 end, false)
@@ -219,15 +219,17 @@ register("opx77.duty", function(source, _, raw)
   local src = tonumber(source) or 0
   -- unrestricted, and each run costs two full-PlayerData outbound events
   if src > 0 and OPX.Cooling(src, "duty", 2000) then
-    return OPX.NotifyLocale(src, "error.tooFast", nil, "error")
+    return OPX.CommandNotice(src, raw, "warning", locale("error.tooFast"))
   end
   local player = requirePlayer(source, raw)
   if not player then return end
   CreateThread(function()
     local toggled = OPX.SetJobDuty(player, not player.PlayerData.job.onDuty)
-    OPX.CommandResult(source, raw, toggled.ok,
+    -- a success is already toasted by SetJobDuty itself: `toasted` keeps it to one toast,
+    -- and to the chat line alone on a client that has no toast to show
+    OPX.CommandNotice(source, raw, toggled.ok and "success" or "error",
       toggled.ok and (toggled.value and locale("job.onDuty") or locale("job.offDuty"))
-        or locale(OPX.RefusalKey(toggled.error)))
+        or locale(OPX.RefusalKey(toggled.error)), toggled.ok)
   end)
 end, false)
 
@@ -236,8 +238,7 @@ register("opx77.money", function(source, args, raw)
   local moneyType = args[2] and args[2]:upper()
   local amount = tonumber(args[3])
   if not target or not moneyType or not amount then
-    return OPX.CommandResult(source, raw, false,
-      "usage: opx77.money <playerId|citizenId> <TYPE> <amount>   (negative removes)")
+    return OPX.CommandNotice(source, raw, "warning", locale("command.usage.money"))
   end
 
   local reason = ("staff command by %s"):format(tostring(source))
@@ -252,23 +253,22 @@ register("opx77.money", function(source, args, raw)
 
   -- one params table covers every code the mutators return: `money.insufficient` carries a
   -- {type} placeholder, the others do not, and a spare parameter is ignored
-  OPX.CommandResult(source, raw, ok, ok
-    and ("%s now holds %s"):format(target.PlayerData.citizenId,
-      OPX.FormatMoney(target.PlayerData.money[moneyType] or 0, moneyType))
+  OPX.CommandNotice(source, raw, ok and "success" or "error", ok
+    and locale("command.moneySet", { citizenId = target.PlayerData.citizenId,
+      amount = OPX.FormatMoney(target.PlayerData.money[moneyType] or 0, moneyType) })
     or locale(why or "error.badRequest", { type = moneyType }))
 end, true)
 
 register("opx77.job", function(source, args, raw)
   local target = targetOf(args[1], source)
   if not target or not args[2] then
-    return OPX.CommandResult(source, raw, false,
-      "usage: opx77.job <playerId|citizenId> <job> [grade]")
+    return OPX.CommandNotice(source, raw, "warning", locale("command.usage.job"))
   end
   CreateThread(function()
     local set = OPX.SetJob(target, args[2], tonumber(args[3]) or 0)
-    OPX.CommandResult(source, raw, set.ok,
-      set.ok and ("%s is now %s at %s"):format(target.PlayerData.citizenId,
-        set.value.grade.name, set.value.label)
+    OPX.CommandNotice(source, raw, set.ok and "success" or "error",
+      set.ok and locale("command.jobSet", { citizenId = target.PlayerData.citizenId,
+        grade = set.value.grade.name, job = set.value.label })
         or ("%s (%s)"):format(locale(set.error), tostring(set.detail)))
   end)
 end, true)
@@ -276,14 +276,13 @@ end, true)
 register("opx77.gang", function(source, args, raw)
   local target = targetOf(args[1], source)
   if not target or not args[2] then
-    return OPX.CommandResult(source, raw, false,
-      "usage: opx77.gang <playerId|citizenId> <gang> [grade]")
+    return OPX.CommandNotice(source, raw, "warning", locale("command.usage.gang"))
   end
   CreateThread(function()
     local set = OPX.SetGang(target, args[2], tonumber(args[3]) or 0)
-    OPX.CommandResult(source, raw, set.ok,
-      set.ok and ("%s is now %s in %s"):format(target.PlayerData.citizenId,
-        set.value.grade.name, set.value.label)
+    OPX.CommandNotice(source, raw, set.ok and "success" or "error",
+      set.ok and locale("command.gangSet", { citizenId = target.PlayerData.citizenId,
+        grade = set.value.grade.name, gang = set.value.label })
         or ("%s (%s)"):format(locale(set.error), tostring(set.detail)))
   end)
 end, true)
@@ -291,12 +290,12 @@ end, true)
 register("opx77.group", function(source, args, raw)
   local groupType, name = args[1], args[2]
   if groupType ~= "job" and groupType ~= "gang" or not name then
-    return OPX.CommandResult(source, raw, false, "usage: opx77.group <job|gang> <name>")
+    return OPX.CommandNotice(source, raw, "warning", locale("command.usage.group"))
   end
   CreateThread(function()
     local members = OPX.GetGroupMembers(groupType, name)
     if not members.ok then
-      return OPX.CommandResult(source, raw, false, tostring(members.error))
+      return OPX.CommandNotice(source, raw, "error", tostring(members.error))
     end
     local lines = { ("%s %s -- %d member(s)"):format(groupType, name, #members.value) }
     for i = 1, #members.value do
@@ -316,8 +315,8 @@ register("opx77.save", function(source, _, raw)
     for i = 1, #players do
       if OPX.Save(players[i]).ok then saved = saved + 1 end
     end
-    OPX.CommandResult(source, raw, true,
-      ("saved %d of %d character(s)"):format(saved, #players))
+    OPX.CommandNotice(source, raw, "success",
+      locale("command.saved", { saved = saved, total = #players }))
   end)
 end, true)
 

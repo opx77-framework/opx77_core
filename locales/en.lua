@@ -55,6 +55,17 @@ OPX.Locale.register("en", {
   ["command.usage.create"]   = "usage: /opx77.create <firstName> <lastName> " ..
                                "[nomad|streetkid|corpo] [female|male]",
   ["command.usage.delete"]   = "usage: /opx77.delete <citizenId>",
+  ["command.usage.money"]    = "usage: /opx77.money <playerId|citizenId> <TYPE> <amount> " ..
+                               "(negative removes)",
+  ["command.usage.job"]      = "usage: /opx77.job <playerId|citizenId> <job> [grade]",
+  ["command.usage.gang"]     = "usage: /opx77.gang <playerId|citizenId> <gang> [grade]",
+  ["command.usage.group"]    = "usage: /opx77.group <job|gang> <name>",
+  ["command.noSession"]      = "Player {id} has no session.",
+  ["command.positionUnreadable"] = "Your position is not readable right now.",
+  ["command.moneySet"]       = "{citizenId} now holds {amount}.",
+  ["command.jobSet"]         = "{citizenId} is now {grade} at {job}.",
+  ["command.gangSet"]        = "{citizenId} is now {grade} in {gang}.",
+  ["command.saved"]          = "Saved {saved} of {total} character(s).",
   ["command.entered"]        = "You are in the world as {citizenId}.",
   ["command.characterCount"] = "{count} character(s):",
   ["command.help.characters"] = "List your characters.",

@@ -55,6 +55,19 @@ OPX.Locale.register("fr", {
   ["command.usage.create"]   = "usage : /opx77.create <prénom> <nom> " ..
                                "[nomad|streetkid|corpo] [female|male]",
   ["command.usage.delete"]   = "usage : /opx77.delete <identifiantCitoyen>",
+  ["command.usage.money"]    = "usage : /opx77.money <numéroJoueur|identifiantCitoyen> <TYPE> " ..
+                               "<montant> (négatif pour retirer)",
+  ["command.usage.job"]      = "usage : /opx77.job <numéroJoueur|identifiantCitoyen> <métier> " ..
+                               "[grade]",
+  ["command.usage.gang"]     = "usage : /opx77.gang <numéroJoueur|identifiantCitoyen> <gang> " ..
+                               "[grade]",
+  ["command.usage.group"]    = "usage : /opx77.group <job|gang> <nom>",
+  ["command.noSession"]      = "Le joueur {id} n'a pas de session.",
+  ["command.positionUnreadable"] = "Votre position est illisible pour le moment.",
+  ["command.moneySet"]       = "{citizenId} détient maintenant {amount}.",
+  ["command.jobSet"]         = "{citizenId} est maintenant {grade} chez {job}.",
+  ["command.gangSet"]        = "{citizenId} est maintenant {grade} chez {gang}.",
+  ["command.saved"]          = "{saved} personnage(s) sur {total} sauvegardé(s).",
   ["command.entered"]        = "Vous êtes en jeu avec {citizenId}.",
   ["command.characterCount"] = "{count} personnage(s) :",
   ["command.help.characters"] = "Lister vos personnages.",

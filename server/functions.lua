@@ -143,14 +143,38 @@ function OPX.NotifyLocale(source, key, params, kind)
   OPX.Notify(source, locale(OPX.RefusalKey(key), params), kind)
 end
 
---- Answers a command the way the shipped resources do.
+--- Answers a command with a report someone asked to read -- a list, a dump, a config block --
+--- as a chat line. Not on `open77:command:result`: opx77_chat prints no accepted result there.
+--- What a command DID is answered with `OPX.CommandNotice` instead.
 ---@param source Source|nil  nil or 0 prints to the console
 ---@param raw string|nil
 ---@param accepted boolean
 ---@param message string
 function OPX.CommandResult(source, raw, accepted, message)
   if source and source > 0 then
-    TriggerClientEvent("open77:command:result", source, raw or "", accepted == true, message)
+    TriggerClientEvent("chat:addMessage", source, {
+      type = accepted and "info" or "error",
+      author = OPX.Config.SHARED.SERVER_NAME,
+      text = message,
+      color = accepted and { 120, 220, 232 } or { 255, 76, 92 },
+    })
+  else
+    print(message)
+  end
+end
+
+--- Answers a command with what it did, or why it did not: a toast the core's client half
+--- raises through opx77_notify, and the chat line it used to be on a client without it.
+---@param source Source|nil  nil or 0 prints to the console
+---@param raw string|nil
+---@param kind "success"|"warning"|"error"  warning for what was typed wrong or too fast
+---@param message string
+---@param toasted? boolean  true when the action already raised this toast through
+---        `OPX.Notify`: the client then only writes the chat line, and only without a toast
+function OPX.CommandNotice(source, raw, kind, message, toasted)
+  if source and source > 0 then
+    TriggerClientEvent(OPX.Events.Client.ANSWER, source, raw or "", kind, message,
+      toasted == true)
   else
     print(message)
   end

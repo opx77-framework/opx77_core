@@ -70,7 +70,7 @@ player uses are open and take a cooldown instead.
 | `opx77.delete` | open — soft-delete one |
 | `opx77.duty` | open — clock in or out |
 | `opx77` | ACL — who is in the world, and the boot state |
-| `opx77.where` / `opx77.whois` / `opx77.here` | ACL — diagnostics, English only |
+| `opx77.where` / `opx77.whois` / `opx77.here` | ACL — diagnostics; the reports are English only |
 | `opx77.money` / `opx77.job` / `opx77.gang` | ACL — staff edits, audited |
 | `opx77.group` | ACL — the members of a job or gang |
 | `opx77.save` | ACL — write every loaded character back now |
@@ -79,6 +79,17 @@ Every one of them is offered in the chat's autocomplete with its arguments and a
 for each, from `locales/`, when the chat announces itself with `chat:ready`. An ACL command is
 offered only to a player the ACL grants it, read with `Open77.acl.isAllowed` — the one reason
 the manifest declares `acl.read`. A host without that reader offers the open five alone.
+
+A command answers what it did as a toast and what it reads as a chat line. Selecting, creating
+or deleting a character, clocking in, a money, job or gang edit and a save answer with a toast
+through `opx77_notify`, raised by the core's client half at `NOTIFY_POSITION`: a success, a
+warning for a usage, an unknown player or a command run again too fast, an error when it could
+not be done. `opx77`, `opx77.where`, `opx77.whois`, `opx77.here`, `opx77.characters` and
+`opx77.group` are reports someone asked to read — lists, a dump, a config block to copy — so
+they are a chat line, sent with `chat:addMessage`; their bodies stay English where the table
+says so. Neither goes on `open77:command:result`, whose accepted answers `opx77_chat` does not
+print. `opx77_notify` stays optional: while it is not running a toast is the chat line it
+replaced, and the client log says so once. The console reads every answer as a printed line.
 
 ## Exports
 

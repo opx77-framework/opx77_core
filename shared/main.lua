@@ -36,6 +36,7 @@ OPX.Events = {
     GANG_UPDATE = "opx77:client:onGangUpdate",
     APPEARANCE_UPDATE = "opx77:client:onAppearanceUpdate",
     NOTIFY = "opx77:client:notify",
+    ANSWER = "opx77:client:commandAnswer",
   },
 
   --- client -> server. Every payload is attacker-controlled; only `source` cannot be forged.

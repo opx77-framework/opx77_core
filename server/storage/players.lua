@@ -20,6 +20,14 @@ local function encode(value)
   return json.encode(value or {})
 end
 
+--- A nullable JSON column's parameter. The bridge drops a nil parameter rather than binding
+--- NULL, and MySqlConnector then refuses the statement (`Parameter '@x' must be defined`), so
+--- absence travels as "" and the statement turns it back into NULL with NULLIF: encoded JSON is
+--- never empty.
+local function nullable(value)
+  return value ~= nil and json.encode(value) or ""
+end
+
 --- Records the account behind a session. `display_name` is assigned unconditionally because
 --- ON UPDATE CURRENT_TIMESTAMP only fires when a column changes.
 ---@param userId UserId
@@ -124,7 +132,8 @@ function Players.insert(entity)
 INSERT INTO opx77_characters
     (citizen_id, user_id, cid, name, char_info, money, job, gang, position, metadata)
 VALUES
-    (@citizen, @user, @cid, @name, @charInfo, @money, @job, @gang, @position, @metadata)
+    (@citizen, @user, @cid, @name, @charInfo, @money, @job, @gang, NULLIF(@position, ''),
+     @metadata)
   ]], {
     citizen = entity.citizenId,
     user = entity.userId,
@@ -134,7 +143,7 @@ VALUES
     money = encode(entity.money),
     job = encode(entity.job),
     gang = encode(entity.gang),
-    position = entity.position and encode(entity.position) or nil,
+    position = nullable(entity.position),
     metadata = encode(entity.metadata),
   })
 end
@@ -152,9 +161,9 @@ UPDATE opx77_characters
        money = @money,
        job = @job,
        gang = @gang,
-       position = @position,
+       position = NULLIF(@position, ''),
        metadata = @metadata,
-       appearance = @appearance,
+       appearance = NULLIF(@appearance, ''),
        last_logged_out = CASE WHEN @loggedOut = 1 THEN CURRENT_TIMESTAMP ELSE last_logged_out END
  WHERE citizen_id = @citizen
   ]], {
@@ -164,9 +173,9 @@ UPDATE opx77_characters
     money = encode(entity.money),
     job = encode(entity.job),
     gang = encode(entity.gang),
-    position = entity.position and encode(entity.position) or nil,
+    position = nullable(entity.position),
     metadata = encode(entity.metadata),
-    appearance = entity.appearance and encode(entity.appearance) or nil,
+    appearance = nullable(entity.appearance),
     loggedOut = loggedOut and 1 or 0,
   })
 end
@@ -179,11 +188,11 @@ end
 function Players.saveAppearance(citizenId, appearance)
   return Storage.execute([[
 UPDATE opx77_characters
-   SET appearance = @appearance
+   SET appearance = NULLIF(@appearance, '')
  WHERE citizen_id = @citizen AND deleted_at IS NULL
   ]], {
     citizen = citizenId,
-    appearance = appearance and json.encode(appearance) or nil,
+    appearance = nullable(appearance),
   })
 end
 

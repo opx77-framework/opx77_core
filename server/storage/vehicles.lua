@@ -10,6 +10,17 @@ OPX.Storage.Vehicles = Vehicles
 --- gamemode adds its own states without a migration.
 Vehicles.STATE = { OUT = 0, STORED = 1, IMPOUNDED = 2 }
 
+--- A nullable column's parameter. The bridge drops a nil parameter rather than binding NULL,
+--- and MySqlConnector then refuses the statement, so absence travels as "" and the statement
+--- turns it back into NULL with NULLIF: neither encoded JSON nor an appearance name is empty.
+---@param value any
+---@param encoded boolean  whether the column holds JSON
+---@return string
+local function nullable(value, encoded)
+  if value == nil then return "" end
+  return encoded and json.encode(value) or tostring(value)
+end
+
 ---@param row table
 ---@return table
 local function toEntity(row)
@@ -70,18 +81,18 @@ function Vehicles.insert(entity)
   return Storage.execute([[
 INSERT INTO opx77_vehicles (plate, citizen_id, record, appearance, garage, state, health,
                             body, paint, metadata)
-VALUES (@plate, @citizen, @record, @appearance, @garage, @state, @health, @body, @paint,
-        @metadata)
+VALUES (@plate, @citizen, @record, NULLIF(@appearance, ''), @garage, @state, @health,
+        NULLIF(@body, ''), NULLIF(@paint, ''), @metadata)
   ]], {
     plate = entity.plate,
     citizen = entity.citizenId,
     record = entity.record,
-    appearance = entity.appearance,
+    appearance = nullable(entity.appearance, false),
     garage = entity.garage,
     state = entity.state,
     health = entity.health,
-    body = entity.damage and json.encode(entity.damage) or nil,
-    paint = entity.paint and json.encode(entity.paint) or nil,
+    body = nullable(entity.damage, true),
+    paint = nullable(entity.paint, true),
     metadata = json.encode(entity.metadata or {}),
   })
 end
@@ -92,16 +103,16 @@ end
 function Vehicles.save(entity)
   return Storage.execute([[
 UPDATE opx77_vehicles
-   SET garage = @garage, state = @state, health = @health, body = @body, paint = @paint,
-       metadata = @metadata
+   SET garage = @garage, state = @state, health = @health, body = NULLIF(@body, ''),
+       paint = NULLIF(@paint, ''), metadata = @metadata
  WHERE plate = @plate
   ]], {
     plate = entity.plate,
     garage = entity.garage,
     state = entity.state,
     health = entity.health,
-    body = entity.damage and json.encode(entity.damage) or nil,
-    paint = entity.paint and json.encode(entity.paint) or nil,
+    body = nullable(entity.damage, true),
+    paint = nullable(entity.paint, true),
     metadata = json.encode(entity.metadata or {}),
   })
 end

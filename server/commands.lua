@@ -63,6 +63,24 @@ local function tooFast(source, raw, key, everyMs)
 end
 
 --- @author DemiAutomatic
+--- @method failureText
+--- @description Renders a failed Result as catalogue text, logging a hidden cause.
+--- @param failed {Result}
+--- @param withDetail {boolean} Appends the detail of a catalogue code.
+--- @returns {string}
+local function failureText(failed, withDetail)
+	local key = OPX.RefusalKey(failed.error)
+	if key ~= failed.error then
+		Open77.log.warn(('[commands] %s: %s'):format(tostring(failed.error), tostring(failed.detail)))
+		return locale(key)
+	end
+	if withDetail and failed.detail ~= nil then
+		return ('%s (%s)'):format(locale(key), tostring(failed.detail))
+	end
+	return locale(key)
+end
+
+--- @author DemiAutomatic
 --- @command /opx77
 --- @description Lists who is in the world and the boot state.
 register('opx77', function(source, _, raw)
@@ -295,7 +313,7 @@ register('opx77.job', function(source, args, raw)
 		OPX.CommandNotice(source, raw, set.ok and 'success' or 'error',
 			set.ok and locale('command.jobSet', { citizenId = target.PlayerData.citizenId,
 				grade = set.value.grade.name, job = set.value.label })
-				or ('%s (%s)'):format(locale(set.error), tostring(set.detail)))
+				or failureText(set, true))
 	end)
 end, true)
 
@@ -312,7 +330,7 @@ register('opx77.gang', function(source, args, raw)
 		OPX.CommandNotice(source, raw, set.ok and 'success' or 'error',
 			set.ok and locale('command.gangSet', { citizenId = target.PlayerData.citizenId,
 				grade = set.value.grade.name, gang = set.value.label })
-				or ('%s (%s)'):format(locale(set.error), tostring(set.detail)))
+				or failureText(set, true))
 	end)
 end, true)
 
@@ -327,7 +345,7 @@ register('opx77.group', function(source, args, raw)
 	CreateThread(function()
 		local members = OPX.GetGroupMembers(groupType, name)
 		if not members.ok then
-			return OPX.CommandNotice(source, raw, 'error', tostring(members.error))
+			return OPX.CommandNotice(source, raw, 'error', failureText(members, false))
 		end
 		local lines = { ('%s %s -- %d member(s)'):format(groupType, name, #members.value) }
 		for i = 1, #members.value do

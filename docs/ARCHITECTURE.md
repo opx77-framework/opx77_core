@@ -725,6 +725,11 @@ ajoutée sans que le chat apprenne si elle est restreinte.
   qu'attend `config/shared.lua` (`DEFAULT_SPAWN`).
 - `opx77.create` ne renvoie que la ligne de locale : la commande est ouverte, et `detail` peut
   contenir une exception brute de la base.
+- `opx77.job`, `opx77.gang` et `opx77.group` rendent un échec par `failureText` : un code du
+  catalogue devient sa ligne de locale (avec `detail` pour les deux premières, le nom du métier
+  ou du gang), et un code de stockage (`query-failed`, `no-database`) devient
+  `error.unavailable` à l'écran, sa cause écrite dans le journal. Ce sont des commandes ACL, mais
+  un message MySQL n'a rien à faire dans un toast.
 - `opx77.duty` est ouverte, et chaque exécution coûte deux événements sortants portant tout
   `PlayerData` : d'où son cooldown de 2 s. Une réussite est déjà annoncée en toast par
   `OPX.SetJobDuty` ; le drapeau `toasted` de `OPX.CommandNotice` la limite à un seul toast, et à
@@ -1404,7 +1409,3 @@ réserve, même source).
 - `OPX.Vehicles.Give` lève `vehicle.plateExhausted` avec la dernière plaque tirée en détail, et
   ne compte que les échecs contenant `Duplicate` (sensible à la casse), alors que
   `OPX.CreateCharacter` compare `duplicate` en minuscules.
-- `server/commands.lua` : `opx77.group` renvoie en cas d'échec le code brut
-  (`tostring(members.error)`, par exemple `query-failed`) plutôt qu'une ligne de locale ;
-  `opx77.job` et `opx77.gang` ajoutent `detail` à la ligne rendue. Ce sont des commandes ACL,
-  mais la réponse contraste avec la règle « jamais un code brut » des refus.

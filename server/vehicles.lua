@@ -55,6 +55,19 @@ local function character(source)
 end
 
 --- @author DemiAutomatic
+--- @method applyCondition
+--- @description Copies a spawned vehicle's health, damage and flags onto its row.
+--- @param vehicle {table}
+--- @param record {table}
+--- @param snapshot {table}
+local function applyCondition(vehicle, record, snapshot)
+	vehicle.health = finiteNumber(snapshot.health) or vehicle.health
+	vehicle.damage = Open77.vehicles.getDamage(record.id)
+	vehicle.metadata = vehicle.metadata or {}
+	vehicle.metadata.flags = finiteNumber(snapshot.flags)
+end
+
+--- @author DemiAutomatic
 --- @method OPX.Vehicles.Give
 --- @description Stores a new vehicle for a character under a fresh plate.
 --- @param citizenId {string}
@@ -207,10 +220,7 @@ function OPX.Vehicles.Store(plateId, garage)
 				'its condition is not written'):format(plateId, tostring(fetched.detail)))
 		else
 			local vehicle = fetched.value
-			vehicle.health = finiteNumber(snapshot.health) or vehicle.health
-			vehicle.damage = Open77.vehicles.getDamage(record.id)
-			vehicle.metadata = vehicle.metadata or {}
-			vehicle.metadata.flags = finiteNumber(snapshot.flags)
+			applyCondition(vehicle, record, snapshot)
 			vehicle.state = Store.STATE.STORED
 			if garage ~= nil then vehicle.garage = garage end
 			Store.save(vehicle)
@@ -290,10 +300,7 @@ CreateThread(function()
 				local fetched = Store.fetchOne(plateId)
 				if not fetched.ok then return end
 				local vehicle = fetched.value
-				vehicle.health = finiteNumber(snapshot.health) or vehicle.health
-				vehicle.damage = Open77.vehicles.getDamage(record.id)
-				vehicle.metadata = vehicle.metadata or {}
-				vehicle.metadata.flags = finiteNumber(snapshot.flags)
+				applyCondition(vehicle, record, snapshot)
 				Store.save(vehicle)
 			end)
 			if not ok then

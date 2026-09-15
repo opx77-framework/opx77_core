@@ -420,9 +420,7 @@ local HELP = {
 --- @param name {string}
 --- @returns {boolean}
 local function permitted(player, name)
-	local acl = Open77.acl
-	if type(acl) ~= 'table' or type(acl.isAllowed) ~= 'function' then return false end
-	local read, allowed = pcall(acl.isAllowed, player, 'command.' .. name)
+	local read, allowed = pcall(Open77.acl.isAllowed, player, 'command.' .. name)
 	return read and allowed == true
 end
 

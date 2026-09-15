@@ -104,22 +104,9 @@ do
 end
 
 --- @author DemiAutomatic
---- @type {table<string, function|nil>}
---- @description The host's routing bucket functions, namespaced or global.
-local api = {}
-do
-	local ns = type(Open77.routingBuckets) == 'table' and Open77.routingBuckets or {}
-	api.getPlayer = ns.getPlayer or rawget(_G, 'GetPlayerRoutingBucket')
-	api.setPlayer = ns.setPlayer or rawget(_G, 'SetPlayerRoutingBucket')
-	api.setPopulationEnabled = ns.setPopulationEnabled or
-		rawget(_G, 'SetRoutingBucketPopulationEnabled')
-	api.setLockdownMode = ns.setLockdownMode or rawget(_G, 'SetRoutingBucketEntityLockdownMode')
-	if isolate and (type(api.getPlayer) ~= 'function' or type(api.setPlayer) ~= 'function') then
-		Open77.log.warn('[bucket] this server has no routing bucket API: players choosing a ' ..
-			'character are not isolated')
-		isolate = false
-	end
-end
+--- @type {table}
+--- @description The host's routing bucket API.
+local api = Open77.routingBuckets
 
 --- @author DemiAutomatic
 --- @type {table<integer, boolean>}
@@ -170,7 +157,6 @@ end
 --- @param source {Source}
 --- @returns {integer|nil}
 function OPX.Buckets.current(source)
-	if type(api.getPlayer) ~= 'function' then return nil end
 	local read, bucket = pcall(api.getPlayer, source)
 	return read and tonumber(bucket) or nil
 end
@@ -195,7 +181,6 @@ end
 --- @param why {string}
 --- @returns {boolean}
 function OPX.Buckets.move(source, bucket, why)
-	if type(api.setPlayer) ~= 'function' then return false end
 	local from = Buckets.current(source)
 	if from == bucket then return true end
 	local called, moved, reason = pcall(api.setPlayer, source, bucket)
@@ -216,10 +201,8 @@ end
 local function prepare(bucket)
 	if prepared[bucket] then return end
 	prepared[bucket] = true
-	if type(api.setPopulationEnabled) == 'function' then
-		pcall(api.setPopulationEnabled, bucket, population)
-	end
-	if lockdown ~= nil and type(api.setLockdownMode) == 'function' then
+	pcall(api.setPopulationEnabled, bucket, population)
+	if lockdown ~= nil then
 		pcall(api.setLockdownMode, bucket, lockdown)
 	end
 end

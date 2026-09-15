@@ -130,10 +130,7 @@ function OPX.Notify(source, message, kind, durationMs)
 	if not source or source <= 0 then return end
 	if repeated(source, 'notify:' .. tostring(kind) .. ':' .. tostring(message)) then return end
 
-	local api = Open77.notifications
-	if not api or type(api.send) ~= 'function' then return end
-
-	api.send(source, {
+	Open77.notifications.send(source, {
 		type = kind or 'info',
 		title = OPX.Config.SHARED.SERVER_NAME,
 		message = message,

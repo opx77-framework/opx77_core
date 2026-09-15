@@ -565,18 +565,16 @@ le panneau Warden pendant que des gens jouent. Elles se lisent dans `OPX.Tune.KE
 s'en servir : copiée dans une locale au niveau du fichier, une valeur resterait figée pour toute la
 durée de la ressource.
 
-- La table de repli `defaults` est construite depuis la même déclaration, pour qu'une clé ne
-  puisse pas exister dans l'une et pas dans l'autre. Un binaire antérieur aux tunables n'a pas
-  d'`Open77.tunables` du tout ; c'est détecté une fois, au chargement, et le core tourne alors sur
-  les valeurs de `config/server.lua` comme valeurs fixes, avec un avertissement.
+- Chaque valeur déclarée a pour défaut la clé de `config/server.lua` correspondante ; ensuite, le
+  panneau et `tunables.json` de l'hôte en sont les propriétaires.
 - `Open77.tunables.declare` lève en cas de déclaration refusée, et c'est voulu : mieux vaut ne pas
   démarrer que tourner sur une valeur que le panneau ne sait pas régler.
 - `SELECTION_MS` a pour plafond `ENTRY.PIPELINE_MS`, lui-même sous `ENTRY.GATE_MS` : le core ne
   rafraîchit jamais sa prise sur la barrière, et une sélection plus longue ferait déclarer le core
   mort par l'hôte en plein écran de sélection.
-- `OPX.TuneNumber` relit une valeur avec un plancher. Le panneau impose `min` et `max`, mais un
-  hôte sans tunables rend ce que dit `config/server.lua`. Le plancher est aussi la réponse pour une
-  clé non déclarée, pour qu'aucun appelant ne compare un nombre à `nil`. Le test est
+- `OPX.TuneNumber` relit une valeur avec un plancher. Le panneau impose `min` et `max` ; le
+  plancher est aussi la réponse pour une valeur qui ne serait pas un nombre fini, pour qu'aucun
+  appelant ne compare un nombre à `nil`. Le test est
   `OPX.Math.isFinite` et non `value ~= value` : une infinité passe un test de NaN et figerait un
   intervalle.
 
@@ -602,9 +600,9 @@ dont le compte a changé. Les emplacements périmés sont collectés pendant le 
 
 ## Les réponses et les refus
 
-- **`OPX.Notify`** passe par `Open77.notifications` et ne fait rien quand aucune ressource ne
-  dessine `open77:notifications:show` : le core ne déclare aucune dépendance sur une telle
-  ressource.
+- **`OPX.Notify`** passe par `Open77.notifications`, que l'hôte route vers le paquet client
+  officiel `open77_notifications` : sans lui, le toast ne s'affiche nulle part, et le core ne
+  déclare aucune dépendance sur lui.
 - **`OPX.RefusalKey`** garantit qu'un code rendu à un joueur existe dans le catalogue. La couche
   de stockage répond `query-failed` ou `no-database`, un validateur `too-short` : ces codes sont
   pour le journal, pas pour un joueur, et deviennent `error.unavailable` (avec une ligne
@@ -728,8 +726,8 @@ qu'elle est au moment de l'envoi et trie les types de monnaie, sans quoi l'ordre
 remanierait la liste d'une suggestion à l'autre. Une commande restreinte n'est proposée qu'à un
 joueur que l'ACL laisserait l'exécuter (`permitted`, par `Open77.acl.isAllowed`) : une suggestion
 est un indice dans une zone de texte, pas une autorisation, et la liste du staff ne regarde
-personne d'autre. Sans lecteur ACL sur l'hôte, une commande restreinte n'est proposée à
-personne plutôt qu'à tout le monde. `chat:ready` est un événement réseau que n'importe qui peut
+personne d'autre. Une lecture de l'ACL qui lève compte comme un refus : la
+commande est alors proposée à personne plutôt qu'à tout le monde. `chat:ready` est un événement réseau que n'importe qui peut
 envoyer, et la réponse pèse quelques kilo-octets : il a son propre cooldown de 10 s.
 
 ## La barrière d'entrée
@@ -777,8 +775,8 @@ sur une incarnation.
   barrière connue, le statut est **demandé** à l'hôte plutôt que la libération sautée : une prise
   que personne ne libère n'a pas d'échéance et bloque ce joueur aussi longtemps que la ressource
   répond.
-- `OPX.Lifecycle.isReady` lit comme ouverte une barrière absente, et un identifiant sur lequel
-  l'hôte lève.
+- `OPX.Lifecycle.isReady` lit comme ouverte une barrière pour un identifiant sur lequel l'hôte
+  lève.
 - `OPX.Lifecycle.beginEntry` tourne sur son propre thread pour la lecture en base, et chaque
   chemin d'échec libère la barrière plutôt que de laisser le joueur tenu. Le déplacement dans le
   bucket de sélection se fait volontairement sous la barrière fermée : il n'écrit ni
@@ -804,10 +802,9 @@ sélection coupe l'isolation (ligne d'erreur). `ISOLATE = false` coupe toute la 
 n'est déplacé, et un bucket stocké est honoré comme avant. `LOCKDOWN = false` laisse le mode de
 l'hôte tel quel.
 
-Les fonctions de l'hôte sont prises dans `Open77.routingBuckets` quand l'hôte l'installe, et dans
-les globales équivalentes sinon : les deux sont documentées comme équivalentes et aucune ne
-demande de permission de manifeste. Sans lecture ni écriture du bucket d'un joueur, l'isolation
-est coupée avec un avertissement.
+Les fonctions de l'hôte sont celles d'`Open77.routingBuckets`, installé pour toute ressource
+serveur et sans permission de manifeste ; chaque appel passe par un `pcall`, et une lecture qui
+lève répond « bucket inconnu ».
 
 La politique d'un bucket de sélection (pas de population ambiante, le lockdown configuré, comme
 la plateforme prépare ses propres manches isolées) est posée par `prepare` une fois par bucket :

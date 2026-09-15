@@ -160,7 +160,6 @@ end
 --- @returns {string|nil}
 local function toast(definition)
 	if GetResourceState(NOTIFY) ~= 'running' then return 'not_running' end
-	if Open77.exports == nil then return 'not_dispatched' end
 	local dispatched, promise, reason = pcall(Open77.exports.call, NOTIFY, 'show', definition)
 	if not dispatched then return tostring(promise) end
 	if not promise then return tostring(reason or 'not_dispatched') end

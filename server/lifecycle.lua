@@ -11,23 +11,9 @@ OPX.Lifecycle = {}
 local Lifecycle = OPX.Lifecycle
 
 --- @author DemiAutomatic
---- @type {boolean}
---- @description Whether this host installs the readiness gate API.
-local HAS_GATE = type(Open77.ready) == 'table'
-	and type(Open77.ready.participate) == 'function'
-	and type(Open77.ready.hold) == 'function'
-	and type(Open77.ready.release) == 'function'
-	and type(Open77.ready.status) == 'function'
-
---- @author DemiAutomatic
 --- @method OPX.Lifecycle.participate
 --- @description Declares the core's participation in the gate, once at load.
 function OPX.Lifecycle.participate()
-	if not HAS_GATE then
-		Open77.log.warn('[lifecycle] this server has no Open77.ready gate: characters still ' ..
-			'load, but nothing stops another resource placing a player first')
-		return
-	end
 	Open77.ready.participate({
 		livenessIntervalMs = Config.ENTRY.GATE_MS,
 		reason = 'opx77_character_selection',
@@ -51,7 +37,6 @@ end
 --- @param source {Source}
 --- @param reason {string|nil}
 function OPX.Lifecycle.hold(source, reason)
-	if not HAS_GATE then return end
 	local session = OPX.Sessions[source]
 	if not session then return end
 
@@ -68,7 +53,6 @@ end
 --- @param source {Source}
 --- @param note {string|nil}
 function OPX.Lifecycle.release(source, note)
-	if not HAS_GATE then return end
 	local session = OPX.Sessions[source]
 
 	local gateSession = session and session.gateSession
@@ -92,7 +76,6 @@ end
 --- @param source {Source}
 --- @returns {boolean}
 function OPX.Lifecycle.isReady(source)
-	if not HAS_GATE or type(Open77.ready.isReady) ~= 'function' then return true end
 	local read, open = pcall(Open77.ready.isReady, source)
 	return not read or open == true
 end

@@ -118,7 +118,7 @@ player uses are open and take a cooldown instead.
 Every one of them is offered in the chat's autocomplete with its arguments and a line of help
 for each, from `locales/`, when the chat announces itself with `chat:ready`. An ACL command is
 offered only to a player the ACL grants it, read with `Open77.acl.isAllowed` — the one reason
-the manifest declares `acl.read`. A host without that reader offers the open five alone.
+the manifest declares `acl.read`.
 
 A command answers what it did as a toast and what it reads as a chat line. Selecting, creating
 or deleting a character, clocking in, a money, job or gang edit and a save answer with a toast

@@ -77,24 +77,9 @@ local DECLARATION = {
 }
 
 --- @author DemiAutomatic
---- @type {table<string, any>}
---- @description Declared values, the fallback for a host without tunables.
-local defaults = {}
-for key, entry in pairs(DECLARATION) do defaults[key] = entry.value end
-
---- @author DemiAutomatic
---- @type {boolean}
---- @description Whether this host installs Open77.tunables at all.
-local HAS_TUNABLES = type(Open77.tunables) == 'table'
-	and type(Open77.tunables.declare) == 'function'
-
-if HAS_TUNABLES then
-	OPX.Tune = Open77.tunables.declare(DECLARATION)
-else
-	OPX.Tune = defaults
-	Open77.log.warn('[tunables] this server has no Open77.tunables; using config/server.lua ' ..
-		'values as fixed')
-end
+--- @type {table}
+--- @description The live proxy of the declared tunables.
+OPX.Tune = Open77.tunables.declare(DECLARATION)
 
 --- @author DemiAutomatic
 --- @method OPX.TuneNumber
@@ -104,7 +89,6 @@ end
 --- @returns {number}
 function OPX.TuneNumber(key, floor)
 	local value = OPX.Tune[key]
-	if not OPX.Math.isFinite(value) then value = defaults[key] end
 	if not OPX.Math.isFinite(value) then return floor end
 	if floor and value < floor then return floor end
 	return value

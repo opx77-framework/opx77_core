@@ -19,8 +19,8 @@ function OPX.Lifecycle.hold(source, reason) end
 ---@param note? string
 function OPX.Lifecycle.release(source, note) end
 
---- Whether the gate has opened for this player this session. A server with no gate, and an id
---- the host raises on, read as open.
+--- Whether the gate has opened for this player this session. An id the host raises on reads
+--- as open.
 ---@param source Source
 ---@return boolean
 function OPX.Lifecycle.isReady(source) end

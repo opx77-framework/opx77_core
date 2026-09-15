@@ -7,7 +7,7 @@ OPX = OPX or {}
 --- @author DemiAutomatic
 --- @type {string}
 --- @description The core's version, answered by both GetVersion exports.
-OPX.VERSION = '0.5.0'
+OPX.VERSION = '0.6.0'
 
 --- @author DemiAutomatic
 --- @type {boolean}

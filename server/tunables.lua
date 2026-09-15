@@ -67,7 +67,7 @@ local DECLARATION = {
 		value = Config.ENTRY.PIPELINE_MS,
 		type = 'integer', min = 30000, max = Config.ENTRY.PIPELINE_MS, step = 15000,
 		unit = 'ms', apply = 'live',
-		label = 'Character selection deadline', group = 'Characters', order = 2,
+		label = 'Character selection deadline', group = 'Characters', order = 3,
 		description =
 			'How long a joining player may sit in the character screen before the core gives ' ..
 			'up and releases the readiness gate without them. The maximum is held below the ' ..

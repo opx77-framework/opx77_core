@@ -1341,8 +1341,6 @@ réserve, même source).
 - Les bannissements et la file d'attente ne sont pas gérés.
 - `OPX.Storage.ready` garde sa réponse pour toute la durée de la ressource : une base qui revient
   après le démarrage n'est prise en compte qu'au redémarrage du core.
-- Dans la déclaration des tunables, `CHARACTER_ROWS` et `SELECTION_MS` portent tous deux
-  `order = 2` dans le groupe `Characters` : leur ordre d'affichage dans le panneau n'est pas défini.
 - `OPX.Storage.Players.toEntity` est publiée mais aucun fichier du core ne la lit par ce chemin
   (à vérifier dans les autres ressources avant de la garder).
 - `announceMoney` teste `player.Offline` avant d'envoyer `MONEY_CHANGE` au client, mais les trois

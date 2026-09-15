@@ -5,7 +5,6 @@
 OPX.Locale.register('en', {
 	['character.limit'] = 'You already have {max} characters.',
 	['character.rowLimit'] = 'This account has created as many characters as it may.',
-	['character.notYours'] = 'That character is not yours.',
 	['character.notFound'] = 'No character carries that citizen ID.',
 	['character.badName'] = 'That name cannot be used.',
 	['character.badOrigin'] = 'That is not a valid lifepath.',
@@ -54,7 +53,6 @@ OPX.Locale.register('en', {
 	['job.noDuty'] = 'That job has no shifts to clock into.',
 	['job.notMember'] = 'You do not work that job.',
 
-	['gang.updated'] = 'You are now {grade} in {gang}.',
 	['gang.notFound'] = 'No such gang.',
 	['gang.gradeNotFound'] = 'That gang has no such grade.',
 	['gang.notMember'] = 'You are not in that gang.',

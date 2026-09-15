@@ -1391,11 +1391,15 @@ Chaque export répond une table simple `{ ok = boolean, ... }`, jamais un `OPX.R
 
 Presque toutes les clés de `locales/` sont des codes de refus : elles arrivent à `locale()` par
 une variable (`result.error`, `OPX.RefusalKey(code)`) et sont rendues par les satellites avec
-`Locale.exists(code)`. Trois clés ne sont nommées littéralement par aucun fichier du core et sont
-gardées : `job.updated` et `gang.updated` (le texte qu'un plug-in serveur envoie avec
-`OPX.NotifyLocale` après un changement de groupe, comme dans l'exemple d'opx77_doc) et
-`error.noPermission` (le refus qu'un plug-in oppose avec `OPX.Refuse` à une action qu'il
-réserve, même source).
+`Locale.exists(code)`. Deux clés ne sont nommées littéralement par aucun fichier du core et sont
+gardées, parce qu'opx77_doc les donne en exemple à un plug-in serveur : `job.updated` (le texte
+envoyé avec `OPX.NotifyLocale` après un changement de métier, `core/server-api.md`) et
+`error.noPermission` (le refus opposé avec `OPX.Refuse` à une action réservée,
+`core/player.md`).
+
+`character.notYours`, `character.deleteRefused` et `vehicle.notYours` sont des noms
+d'événements du journal d'audit, pas des clés : un joueur ne lit jamais « pas à vous », il reçoit
+`character.notFound` ou `vehicle.notFound` (voir « Pas d'oracle d'existence »).
 
 ## Limites connues
 

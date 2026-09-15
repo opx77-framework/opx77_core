@@ -5,7 +5,6 @@
 OPX.Locale.register('fr', {
 	['character.limit'] = 'Vous avez déjà {max} personnages.',
 	['character.rowLimit'] = "Ce compte a créé autant de personnages qu'il le peut.",
-	['character.notYours'] = 'Ce personnage ne vous appartient pas.',
 	['character.notFound'] = 'Aucun personnage ne porte cet identifiant citoyen.',
 	['character.badName'] = 'Ce nom ne peut pas être utilisé.',
 	['character.badOrigin'] = "Ce parcours de vie n'existe pas.",
@@ -54,7 +53,6 @@ OPX.Locale.register('fr', {
 	['job.noDuty'] = "Ce métier n'a pas de service à prendre.",
 	['job.notMember'] = "Vous n'exercez pas ce métier.",
 
-	['gang.updated'] = 'Vous êtes maintenant {grade} chez {gang}.',
 	['gang.notFound'] = "Ce gang n'existe pas.",
 	['gang.gradeNotFound'] = "Ce gang n'a pas ce grade.",
 	['gang.notMember'] = "Vous n'êtes pas dans ce gang.",

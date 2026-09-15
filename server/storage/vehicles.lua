@@ -21,17 +21,6 @@ local Vehicles = OPX.Storage.Vehicles
 Vehicles.STATE = { OUT = 0, STORED = 1, IMPOUNDED = 2 }
 
 --- @author DemiAutomatic
---- @method nullable
---- @description Binds a nullable column, absence as an empty string.
---- @param value {any}
---- @param encoded {boolean} Whether the column holds JSON.
---- @returns {string}
-local function nullable(value, encoded)
-	if value == nil then return '' end
-	return encoded and json.encode(value) or tostring(value)
-end
-
---- @author DemiAutomatic
 --- @method toEntity
 --- @description Turns a vehicle row into the entity server/vehicles.lua uses.
 --- @param row {table}
@@ -106,12 +95,12 @@ VALUES (@plate, @citizen, @record, NULLIF(@appearance, ''), @garage, @state, @he
 		plate = entity.plate,
 		citizen = entity.citizenId,
 		record = entity.record,
-		appearance = nullable(entity.appearance, false),
+		appearance = entity.appearance ~= nil and tostring(entity.appearance) or '',
 		garage = entity.garage,
 		state = entity.state,
 		health = entity.health,
-		body = nullable(entity.damage, true),
-		paint = nullable(entity.paint, true),
+		body = Storage.Nullable(entity.damage),
+		paint = Storage.Nullable(entity.paint),
 		metadata = json.encode(entity.metadata or {}),
 	})
 end
@@ -132,8 +121,8 @@ UPDATE opx77_vehicles
 		garage = entity.garage,
 		state = entity.state,
 		health = entity.health,
-		body = nullable(entity.damage, true),
-		paint = nullable(entity.paint, true),
+		body = Storage.Nullable(entity.damage),
+		paint = Storage.Nullable(entity.paint),
 		metadata = json.encode(entity.metadata or {}),
 	})
 end

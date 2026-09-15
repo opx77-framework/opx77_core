@@ -112,6 +112,29 @@ function OPX.Storage.transaction(statements)
 end
 
 --- @author DemiAutomatic
+--- @method OPX.Storage.Decode
+--- @description Decodes a JSON column, answering the fallback when it cannot.
+--- @param value {any}
+--- @param fallback {table|nil}
+--- @returns {table|nil}
+function OPX.Storage.Decode(value, fallback)
+	if type(value) == 'table' then return value end
+	if type(value) ~= 'string' or value == '' then return fallback end
+	local ok, decoded = pcall(json.decode, value)
+	if not ok or type(decoded) ~= 'table' then return fallback end
+	return decoded
+end
+
+--- @author DemiAutomatic
+--- @method OPX.Storage.Nullable
+--- @description Binds a nullable JSON column, absence as an empty string.
+--- @param value {any}
+--- @returns {string}
+function OPX.Storage.Nullable(value)
+	return value ~= nil and json.encode(value) or ''
+end
+
+--- @author DemiAutomatic
 --- @method OPX.Storage.ready
 --- @description Probes the database once and answers whether it answered.
 --- @returns {boolean, string}

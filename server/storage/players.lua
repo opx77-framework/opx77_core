@@ -16,18 +16,9 @@ OPX.Storage.Players = {}
 local Players = OPX.Storage.Players
 
 --- @author DemiAutomatic
---- @method decode
+--- @type {fun(value: any, fallback: table|nil): table|nil}
 --- @description Decodes a JSON column, answering the fallback when it cannot.
---- @param value {any}
---- @param fallback {table|nil}
---- @returns {table|nil}
-local function decode(value, fallback)
-	if type(value) == 'table' then return value end
-	if type(value) ~= 'string' or value == '' then return fallback end
-	local ok, decoded = pcall(json.decode, value)
-	if not ok or type(decoded) ~= 'table' then return fallback end
-	return decoded
-end
+local decode = Storage.Decode
 
 --- @author DemiAutomatic
 --- @method encode
@@ -39,13 +30,9 @@ local function encode(value)
 end
 
 --- @author DemiAutomatic
---- @method nullable
---- @description Encodes a nullable JSON column, absence as an empty string.
---- @param value {any}
---- @returns {string}
-local function nullable(value)
-	return value ~= nil and json.encode(value) or ''
-end
+--- @type {fun(value: any): string}
+--- @description Binds a nullable JSON column, absence as an empty string.
+local nullable = Storage.Nullable
 
 --- @author DemiAutomatic
 --- @method OPX.Storage.Players.upsertAccount

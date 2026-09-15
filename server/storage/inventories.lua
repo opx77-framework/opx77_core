@@ -20,19 +20,6 @@ OPX.Storage.Inventories = {}
 local ROWS_PER_INSERT = 50
 
 --- @author DemiAutomatic
---- @method decode
---- @description Decodes a metadata cell, answering nil when it cannot.
---- @param value {any}
---- @returns {table|nil}
-local function decode(value)
-	if type(value) == 'table' then return value end
-	if type(value) ~= 'string' or value == '' then return nil end
-	local ok, decoded = pcall(json.decode, value)
-	if not ok or type(decoded) ~= 'table' then return nil end
-	return decoded
-end
-
---- @author DemiAutomatic
 --- @method toHeader
 --- @description Turns a container row into its header shape.
 --- @param row {table|nil}
@@ -146,7 +133,7 @@ SELECT slot, name, quantity, metadata FROM opx77_inventory_items
 			slot = tonumber(row.slot),
 			name = row.name,
 			count = tonumber(row.quantity),
-			metadata = decode(row.metadata),
+			metadata = Storage.Decode(row.metadata),
 		}
 	end
 	return Result.ok(out)
@@ -176,7 +163,7 @@ function OPX.Storage.Inventories.save(containers)
 				values[#values + 1] = row.slot
 				values[#values + 1] = row.name
 				values[#values + 1] = row.count
-					values[#values + 1] = row.metadata ~= nil and json.encode(row.metadata) or ''
+					values[#values + 1] = Storage.Nullable(row.metadata)
 			end
 			statements[#statements + 1] = {
 				query = 'INSERT INTO opx77_inventory_items (inventory_id, slot, name, quantity, ' ..

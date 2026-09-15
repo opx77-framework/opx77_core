@@ -46,6 +46,19 @@ function OPX.Storage.execute(sql, params) end
 ---@return Result
 function OPX.Storage.transaction(statements) end
 
+--- Decodes a JSON column. A table is answered as it is (a bridge build may hand one over already
+--- decoded); an empty, non-string or undecodable value answers `fallback`.
+---@param value any
+---@param fallback? table
+---@return table|nil
+function OPX.Storage.Decode(value, fallback) end
+
+--- The parameter for a nullable JSON column: the encoded value, or "" for nil, which the
+--- statement turns back into NULL with `NULLIF(@x, '')` because the bridge drops a nil parameter.
+---@param value any
+---@return string
+function OPX.Storage.Nullable(value) end
+
 --- Probes the database once and caches the answer for the run.
 ---@return boolean ready
 ---@return string reason

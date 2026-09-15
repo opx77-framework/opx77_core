@@ -425,12 +425,12 @@ n'est pas réparé, et `OPX.BootError` vaut `no database`.
 Le pont abandonne un paramètre `nil` au lieu de le lier à `NULL`, et MySqlConnector refuse alors
 la requête (`Parameter '@x' must be defined`). Une colonne nullable reçoit donc `''` pour « rien »
 et la requête le retransforme en `NULL` avec `NULLIF(@x, '')` : un JSON encodé n'est jamais vide,
-un nom d'apparence de véhicule non plus. C'est le rôle des fonctions `nullable` de
-`server/storage/players.lua` et `server/storage/vehicles.lua`, et de la cinquième valeur de
-chaque ligne insérée par `OPX.Storage.Inventories.save`.
+un nom d'apparence de véhicule non plus. `OPX.Storage.Nullable` le fait pour toute colonne JSON,
+dans les trois fichiers de requêtes ; le nom d'apparence d'un véhicule, qui n'est pas du JSON, est
+lié de la même façon directement dans `OPX.Storage.Vehicles.insert`.
 
-À la lecture, `decode` accepte une chaîne ou une table déjà décodée, parce qu'une version du pont
-peut faire l'un ou l'autre. Une colonne qui ne se décode pas est absente plutôt que fatale : le
+À la lecture, `OPX.Storage.Decode` accepte une chaîne ou une table déjà décodée, parce qu'une
+version du pont peut faire l'un ou l'autre. Une colonne qui ne se décode pas est absente plutôt que fatale : le
 personnage se charge avec la valeur par défaut de la colonne, la pile d'objets se charge sans ses
 métadonnées.
 

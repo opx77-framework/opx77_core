@@ -267,7 +267,7 @@ AddEventHandler('onVehicleRemoved', function(id, reason)
 	for plateId, record in pairs(live) do
 		if record.id == id then
 			live[plateId] = nil
-			Store.setState(plateId, Store.STATE.STORED)
+			CreateThread(function() Store.setState(plateId, Store.STATE.STORED) end)
 			Open77.log.info(('[vehicles] %s removed: %s'):format(plateId, tostring(reason)))
 			return
 		end

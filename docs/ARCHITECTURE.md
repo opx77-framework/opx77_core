@@ -1173,7 +1173,9 @@ se prouve contre le personnage chargé par la connexion, jamais contre ce que le
   retirée pendant l'attente d'une précédente. Elle sert au départ d'un personnage (événement
   interne `PLAYER_UNLOADED`, pour que l'état soit écrit plutôt que perdu au prochain
   rechargement de l'hôte) et à l'arrêt de la ressource.
-- `onVehicleRemoved` : l'hôte a retiré un véhicule, détruit ou pris par une autre ressource.
+- `onVehicleRemoved` : l'hôte a retiré un véhicule, détruit ou pris par une autre ressource. Le
+  véhicule est oublié tout de suite, et l'état `STORED` est écrit sur un thread : un gestionnaire
+  d'événement n'est pas une coroutine, et une écriture en base y céderait la main hors thread.
 - La boucle de sauvegarde (`SAVE_SECONDS`) est la garantie que les dégâts sont conservés, pas le
   gestionnaire d'arrêt. Elle photographie les clés et enveloppe chaque sauvegarde dans un
   `pcall` : une seule levée mettrait fin, en silence, à la persistance de l'état pour tout le
@@ -1351,10 +1353,6 @@ réserve, même source).
   lecture « en mémoire » peut ainsi déclencher une déconnexion.
 - La fenêtre de réponses d'un joueur est vidée entière à 32 textes : les fenêtres encore actives
   sont perdues avec les autres, et une réponse identique peut repartir avant ses 2 000 ms.
-- `onVehicleRemoved` (`server/vehicles.lua`) appelle `OPX.Storage.Vehicles.setState`, qui attend
-  la base, directement depuis le gestionnaire d'événement et non depuis un `CreateThread` ; la
-  bibliothèque de stockage exige un contexte de coroutine. Le harnais le signale (« await
-  outside a thread »). Si l'hôte ne lance pas ce gestionnaire dans une coroutine, l'écriture lève.
 - `opx77:server:spawnVehicle` en échec envoie à la fois un refus (`OPX.Refuse`) et un toast
   d'erreur (`OPX.NotifyLocale`) avec le même code ; `storeVehicle` n'envoie que le refus.
 - `OPX.Vehicles.Give` lève `vehicle.plateExhausted` avec la dernière plaque tirée en détail, et

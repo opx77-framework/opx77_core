@@ -12,6 +12,9 @@ The core resource of **OPX//77** for the Open77 platform. It owns everything dur
 character — the schema, every write, and the events that publish the result. A satellite draws
 and reacts; it does not persist anything of its own and does not own a table.
 
+Why the code is written the way it is — load order, permissions, invariants, known limits — is in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) (in French).
+
 ## Features
 
 - Character creation, selection and deletion, with a per-account slot limit
@@ -315,6 +318,76 @@ paycheck toast names it too; a value that is not a money type falls back to
 Anything an operator may want to change mid-session is a tunable instead, in
 `server/tunables.lua`. Logging level is not configured here: the host owns it, and the core
 calls `Open77.log` directly.
+
+`config/shared.lua` is shipped to every client in the signed resource set, so everything in it
+is public: credentials, webhooks and admin identifiers belong in `config/server.lua`.
+`config/client.lua` is not authoritative either: a modified client can change any of it, and the
+server re-derives anything that matters.
+
+### `config/shared.lua` — `OPX.Config.SHARED`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `SERVER_NAME` | `"OPX//77"` | shown in the launcher and in player-facing text |
+| `LOCALE` | `"en"` | language of player-facing text; server logs stay English |
+| `MONEY.TYPES` | `{ EDDIES = 500, BANK = 5000 }` | money type names and each one's starting amount for a new character. The names are durable: they become keys in the `money` JSON column, so adding one is free and renaming one orphans every balance stored under the old name. `EDDIES` is carried on the person and losable, `BANK` is held by a bank |
+| `MONEY.DEFAULT` | `"EDDIES"` | the type a payment falls back to when a caller does not name one |
+| `CHARACTERS.NAME.MIN` / `MAX` | `2` / `32` | bounds on each half of a character name, counted in characters, not bytes |
+| `APPEARANCE.GAME_BUILDS` | `{ ["2.31"] = true }` | which game builds a stored face may be read back into. A snapshot captured on another build is refused; widening this does not make an old one fit |
+| `APPEARANCE.MAX_JSON_BYTES` | `49152` | the largest appearance document accepted, in bytes of encoded JSON; a canonical snapshot of 256 options is far below it |
+| `DEFAULT_SPAWN` | `SET = false`, `X`/`Y`/`Z`/`HEADING` `0.0` | where a character with no stored position is placed. Nobody is placed there until `SET` is true; run `opx77.here` in game to print your own coordinate in this exact shape |
+| `NOTIFY_POSITION` | `"top_right"` | where toasts go: `middle_left`, `top_left`, `top_center`, `top_right`, `bottom_left`, `bottom_center` or `bottom_right`. An unknown value is warned about and still sent |
+
+### `config/server.lua` — `OPX.Config.SERVER`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `AUTOSAVE_SECONDS` | `300` | how often a loaded character is written back; bounds what a crash costs |
+| `MONEY.ALLOW_NEGATIVE` | `{ BANK = true }` | money types that may go below zero; a removal from a type not listed is refused rather than truncated |
+| `MONEY.PAYCHECK_MINUTES` | `10` | minutes between paychecks; `0` disables them entirely |
+| `MONEY.PAYCHECK_REQUIRES_DUTY` | `true` | pay only a player who is on duty |
+| `MONEY.PAYCHECK_TYPE` | `"BANK"` | which of `SHARED.MONEY.TYPES` a salary lands in (see above) |
+| `CHARACTERS.DEFAULT_SLOTS` | `3` | how many characters one account may hold |
+| `CHARACTERS.SLOTS_BY_USER` | `{}` | per-account overrides, keyed by durable `userId`; `opx77.whois` prints a player's |
+| `CHARACTERS.ROW_CEILING` | `60` | the most rows one account may ever write to `opx77_characters`. A lifetime ceiling, not a roster size, because a delete is soft: keep it well above `DEFAULT_SLOTS` |
+| `CHARACTERS.CASCADE_TABLES` | `{}` | extra tables whose rows go with a deleted character, as `{ TABLE, COLUMN }` pairs matched on the citizen id. The core's own tables use `ON DELETE CASCADE` and are not listed |
+| `ENTRY.GATE_MS` | `300000` | the liveness interval declared to `Open77.ready.participate`, in ms, clamped by the host to 1000–600000 (see "The entry gate") |
+| `ENTRY.PIPELINE_MS` | `240000` | the core's own deadline for the join sequence, in ms; below `GATE_MS` so the core gives up first, and the ceiling of the `SELECTION_MS` tunable |
+| `ENTRY.BUCKET.ISOLATE` | `true` | one routing bucket per player without a character; `false` leaves everybody in `WORLD` and moves nobody (see "The selection bucket") |
+| `ENTRY.BUCKET.BASE` | `77000` | a player's own bucket is `BASE` + their player id, up to `BASE + 65535`. Keep that range clear of other resources' buckets: the platform's Deathmatch uses 4100–4287 and its Race 6500 |
+| `ENTRY.BUCKET.WORLD` | `0` | where a character goes when its stored position names no bucket, or one in the selection range; the shared world is `0` |
+| `ENTRY.BUCKET.POPULATION` | `false` | ambient population in a selection bucket |
+| `ENTRY.BUCKET.LOCKDOWN` | `"relaxed"` | `inactive`, `relaxed`, `strict` or `full`; `false` leaves the mode alone |
+| `PLAYER.STARTING_METADATA` | `health = 100`, `armor = 0`, `isDead = false`, `inLastStand = false` | the initial `PlayerData.metadata`, and the four keys the core itself reads. A gameplay file's own keys merge on top and survive every save |
+| `PLAYER.DEFAULT_JOB` / `DEFAULT_GANG` | `"unemployed"` / `"none"` | must exist in `data/jobs.lua` / `data/gangs.lua` |
+| `CONFLICTING_PLACERS` | `{ "open77_playerstate", "freeroam", "pursuit", "race" }` | resources that would fight the core over where a player stands (see "Placement conflicts") |
+| `EXPORTS.READ` | `"*"` | who may call the read exports (identity, the change cursor, a vehicle's plate): `"*"` for any server resource, or a set such as `{ opx77_inventory = true }` |
+| `EXPORTS.CALLERS` | `{ opx77_inventory = { scopes = { inventory = true } } }` | every other export is refused unless its caller is listed with the scope it needs; the name is read from the host, never from an argument |
+| `EXPORTS.MAX_RESULT_BYTES` | `32768` | the most an answer may weigh encoded; the host's budget is 48 KiB with its own overhead |
+| `INVENTORY.MAX_SLOTS` | `1000` | slots one container may have |
+| `INVENTORY.MAX_WEIGHT` | `4000000000` | grams; the column is `INT UNSIGNED` |
+| `INVENTORY.MAX_METADATA_BYTES` | `4096` | one stack's metadata, encoded |
+| `INVENTORY.PAGE_ROWS` | `64` | stacks one read answers at most, before the size guard trims it |
+| `INVENTORY.LINKED_KINDS` | `{ character = "citizen", trunk = "plate", glovebox = "plate" }` | kinds whose owner is another row, which must exist and whose deletion takes the container with it; any other kind stands alone |
+
+The `INVENTORY` bounds guard the tables, not the gameplay: `opx77_inventory` decides sizes and
+weights.
+
+### `config/vehicles.lua` — `OPX.Config.VEHICLES`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `PER_CHARACTER` | `8` | the most vehicles one character may own; `0` for no ceiling |
+| `PLATE_FORMAT` | `"11AAA111"` | `1` a digit, `A` a letter, `.` either, anything else stays as written |
+| `DEFAULT_GARAGE` | `"impound"` | where a vehicle created with no garage belongs |
+| `SPAWN_OFFSET` | `3.0` | metres to the side of the player a vehicle appears |
+| `SAVE_SECONDS` | `120` | how often the condition of every vehicle that is out is written |
+
+### `config/client.lua` — `OPX.Config.CLIENT`
+
+| Key | Default | Meaning |
+|---|---|---|
+| `POSITION_REPORT_MS` | `5000` | how often the client reports its heading for the autosave. The server re-reads the authoritative position before writing, so this only decides how fresh the hint is |
 
 ### The entry gate
 

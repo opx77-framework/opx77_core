@@ -1,22 +1,33 @@
---- The OPX namespace: one global, and everything hangs off it.
+--- @author DemiAutomatic
+--- @file shared/main.lua
+--- @description Creates the OPX namespace, its event names and operation names.
 
 OPX = OPX or {}
 
+--- @author DemiAutomatic
+--- @type {string}
+--- @description The core's version, answered by both GetVersion exports.
 OPX.VERSION = '0.5.0'
 
---- Read off a global only one runtime has -- both are installed by the bootstrap before any
---- script runs. Not Open77.database: that is only installed with `database.access`.
+--- @author DemiAutomatic
+--- @type {boolean}
+--- @description True in the server VM, read off a server-only global.
 OPX.IsServer = rawget(_G, 'TriggerClientEvent') ~= nil
+
+--- @author DemiAutomatic
+--- @type {boolean}
+--- @description True in a client VM, read off a client-only global.
 OPX.IsClient = rawget(_G, 'TriggerServerEvent') ~= nil
 
---- Filled in by config/shared.lua, config/server.lua and config/client.lua. SERVER is nil on
---- a client and CLIENT is nil on the server, so a wrong-side read fails loudly.
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The configuration roots filled by the config files.
 OPX.Config = OPX.Config or {}
 
---- Event names, `opx77:<side>:<subject>`. No name appears in two tables: a `TriggerEvent`
---- also reaches `RegisterNetEvent` handlers of the same name.
+--- @author DemiAutomatic
+--- @type {table<string, table<string, string>>}
+--- @description Every event name the core raises or handles, by channel.
 OPX.Events = {
-	--- Owned by Open2077, not by us; listed so there is one place to update if they move.
 	Platform = {
 		PLAYER_CONNECTED = 'onPlayerConnected',
 		PLAYER_READY = 'onPlayerReady',
@@ -25,7 +36,6 @@ OPX.Events = {
 		WORLD_READY = 'open77:worldReady',
 	},
 
-	--- server -> client. A listener holds `network.events` and uses `RegisterNetEvent`.
 	Client = {
 		CHARACTERS = 'opx77:client:characters',
 		PLAYER_LOADED = 'opx77:client:playerLoaded',
@@ -40,7 +50,6 @@ OPX.Events = {
 		ANSWER = 'opx77:client:commandAnswer',
 	},
 
-	--- client -> server. Every payload is attacker-controlled; only `source` cannot be forged.
 	Server = {
 		READY = 'opx77:server:ready',
 		SELECT_CHARACTER = 'opx77:server:selectCharacter',
@@ -53,8 +62,6 @@ OPX.Events = {
 		STORE_VEHICLE = 'opx77:server:storeVehicle',
 	},
 
-	--- Fired by the core's client half after its mirror is updated, so a handler can read
-	--- `OPX.GetPlayerData()` and see the change. Plain `AddEventHandler`, no permission.
 	Local = {
 		CHARACTERS_READY = 'opx77:client:charactersReady',
 		PLAYER_LOADED = 'opx77:client:onPlayerLoaded',
@@ -68,7 +75,6 @@ OPX.Events = {
 		REFUSED = 'opx77:client:refused',
 	},
 
-	--- Resource-local, between core files. These never cross the wire.
 	Internal = {
 		PLAYER_LOADED = 'opx77:player:loaded',
 		PLAYER_UNLOADED = 'opx77:player:unloaded',
@@ -82,8 +88,9 @@ OPX.Events = {
 	},
 }
 
---- Which request a refusal answers: on `Events.Client.NOTIFY`, and the third argument of
---- `Events.Local.REFUSED`. Named after the `Events.Server` request that starts it.
+--- @author DemiAutomatic
+--- @type {table<string, string>}
+--- @description Which request a refusal answers, named after its server event.
 OPX.Operations = {
 	ENTRY = 'entry',
 	ROSTER = 'ready',

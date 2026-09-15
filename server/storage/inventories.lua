@@ -1,21 +1,30 @@
---- Reads and writes for `opx77_inventories` and `opx77_inventory_items`. No policy here:
---- server/exports.lua validates, and opx77_inventory decides what goes in a container.
---- Everything returns a Result and yields: coroutine only.
+--- @author DemiAutomatic
+--- @file server/storage/inventories.lua
+--- @description Reads and writes for the container and item stack tables.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The Result constructors every statement answers with.
 local Result = OPX.Result
+
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The database access every statement runs through.
 local Storage = OPX.Storage
 
 OPX.Storage.Inventories = {}
 local Inventories = OPX.Storage.Inventories
 
---- Rows one INSERT carries inside a save. A container's rows go in several statements of the
---- same transaction past it, which keeps each statement's parameter list short.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Item rows one insert statement carries inside a save.
 local ROWS_PER_INSERT = 50
 
---- Accepts a string or an already-decoded table, because a bridge build may do either. A
---- metadata cell that fails to decode is absent rather than fatal: the stack still loads.
----@param value any
----@return table|nil
+--- @author DemiAutomatic
+--- @method decode
+--- @description Decodes a metadata cell, answering nil when it cannot.
+--- @param value {any}
+--- @returns {table|nil}
 local function decode(value)
 	if type(value) == 'table' then return value end
 	if type(value) ~= 'string' or value == '' then return nil end
@@ -24,8 +33,11 @@ local function decode(value)
 	return decoded
 end
 
----@param row table|nil
----@return table|nil
+--- @author DemiAutomatic
+--- @method toHeader
+--- @description Turns a container row into its header shape.
+--- @param row {table|nil}
+--- @returns {InventoryHeader|nil}
 local function toHeader(row)
 	if not row then return nil end
 	return {
@@ -37,10 +49,11 @@ local function toHeader(row)
 	}
 end
 
---- Whether a living character carries this citizen id. A soft-deleted one does not: its bag
---- stays in the table, and nobody opens it.
----@param citizenId CitizenId
----@return Result  ok value is a boolean
+--- @author DemiAutomatic
+--- @method OPX.Storage.Inventories.characterExists
+--- @description Answers whether a living character carries this citizen id.
+--- @param citizenId {CitizenId}
+--- @returns {Result}
 function OPX.Storage.Inventories.characterExists(citizenId)
 	local row = Storage.single([[
 SELECT 1 AS found FROM opx77_characters
@@ -51,8 +64,11 @@ SELECT 1 AS found FROM opx77_characters
 	return Result.ok(row.value ~= nil)
 end
 
----@param plate string
----@return Result  ok value is a boolean
+--- @author DemiAutomatic
+--- @method OPX.Storage.Inventories.vehicleExists
+--- @description Answers whether an owned vehicle carries this plate.
+--- @param plate {string}
+--- @returns {Result}
 function OPX.Storage.Inventories.vehicleExists(plate)
 	local row = Storage.single(
 		'SELECT 1 AS found FROM opx77_vehicles WHERE plate = @plate LIMIT 1', { plate = plate })
@@ -60,10 +76,11 @@ function OPX.Storage.Inventories.vehicleExists(plate)
 	return Result.ok(row.value ~= nil)
 end
 
---- Finds or creates one container. The unique key on (kind, owner) decides a race between two
---- creators, not a SELECT beforehand, and the size given is only used by the one that creates.
----@param entity InventoryEntity
----@return Result  ok value is { header, created }
+--- @author DemiAutomatic
+--- @method OPX.Storage.Inventories.ensure
+--- @description Finds or creates one container keyed on kind and owner.
+--- @param entity {InventoryEntity}
+--- @returns {Result}
 function OPX.Storage.Inventories.ensure(entity)
 	local inserted = Storage.update([[
 INSERT IGNORE INTO opx77_inventories (kind, owner, citizen_id, plate, slots, max_weight)
@@ -91,8 +108,11 @@ SELECT id, kind, owner, slots, max_weight FROM opx77_inventories
 	return Result.ok({ header = toHeader(row.value), created = tonumber(affected) == 1 })
 end
 
----@param id integer
----@return Result  ok value is a header, or nil
+--- @author DemiAutomatic
+--- @method OPX.Storage.Inventories.header
+--- @description Reads one container's header by id, or nil.
+--- @param id {integer}
+--- @returns {Result}
 function OPX.Storage.Inventories.header(id)
 	local row = Storage.single([[
 SELECT id, kind, owner, slots, max_weight FROM opx77_inventories
@@ -103,12 +123,13 @@ SELECT id, kind, owner, slots, max_weight FROM opx77_inventories
 	return Result.ok(toHeader(row.value))
 end
 
---- One page of a container's stacks, in slot order, after `after`. Paged by slot rather than
---- by offset, so a save landing between two pages cannot shift a stack out of both.
----@param id integer
----@param after integer
----@param limit integer  a constant of the caller's, formatted into the statement
----@return Result  ok value is a list of { slot, name, count, metadata }
+--- @author DemiAutomatic
+--- @method OPX.Storage.Inventories.contents
+--- @description Reads one page of a container's stacks after a slot.
+--- @param id {integer}
+--- @param after {integer}
+--- @param limit {integer} A caller constant formatted into the statement.
+--- @returns {Result}
 function OPX.Storage.Inventories.contents(id, after, limit)
 	local rows = Storage.query(([[
 SELECT slot, name, quantity, metadata FROM opx77_inventory_items
@@ -132,12 +153,11 @@ SELECT slot, name, quantity, metadata FROM opx77_inventory_items
 	return Result.ok(out)
 end
 
---- Rewrites every listed container's rows as one unit: a delete, the inserts, and the stamp.
---- Positional parameters, unlike the rest of this file: a transaction statement is bound the
---- way the platform's own resources bind one, and the count of `?` is checked against the
---- values before anything is sent.
----@param containers { id: integer, rows: InventoryStack[] }[]
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Inventories.save
+--- @description Rewrites every listed container's stacks in one transaction.
+--- @param containers {table[]}
+--- @returns {Result}
 function OPX.Storage.Inventories.save(containers)
 	local statements = {}
 	for c = 1, #containers do
@@ -157,8 +177,7 @@ function OPX.Storage.Inventories.save(containers)
 				values[#values + 1] = row.slot
 				values[#values + 1] = row.name
 				values[#values + 1] = row.count
-				-- absence travels as "" and NULLIF turns it back into NULL: encoded JSON is never empty
-				values[#values + 1] = row.metadata ~= nil and json.encode(row.metadata) or ''
+					values[#values + 1] = row.metadata ~= nil and json.encode(row.metadata) or ''
 			end
 			statements[#statements + 1] = {
 				query = 'INSERT INTO opx77_inventory_items (inventory_id, slot, name, quantity, ' ..
@@ -175,27 +194,34 @@ function OPX.Storage.Inventories.save(containers)
 	return Storage.transaction(statements)
 end
 
----@param id integer
----@param slots integer
----@param maxWeight integer
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Inventories.resize
+--- @description Writes a container's slot count and weight limit.
+--- @param id {integer}
+--- @param slots {integer}
+--- @param maxWeight {integer}
+--- @returns {Result}
 function OPX.Storage.Inventories.resize(id, slots, maxWeight)
 	return Storage.execute(
 		'UPDATE opx77_inventories SET slots = @slots, max_weight = @maxWeight WHERE id = @id',
 		{ id = id, slots = slots, maxWeight = maxWeight })
 end
 
---- Deletes a container; its stacks go with it by cascade.
----@param id integer
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Inventories.delete
+--- @description Deletes a container, its stacks going by cascade.
+--- @param id {integer}
+--- @returns {Result}
 function OPX.Storage.Inventories.delete(id)
 	return Storage.execute('DELETE FROM opx77_inventories WHERE id = @id', { id = id })
 end
 
---- Every container holding an item, the largest stacks first.
----@param name string
----@param limit integer  a constant of the caller's, formatted into the statement
----@return Result  ok value is a list of { id, kind, owner, slot, count }
+--- @author DemiAutomatic
+--- @method OPX.Storage.Inventories.holders
+--- @description Lists the containers holding an item, largest stacks first.
+--- @param name {string}
+--- @param limit {integer} A caller constant formatted into the statement.
+--- @returns {Result}
 function OPX.Storage.Inventories.holders(name, limit)
 	local rows = Storage.query(([[
 SELECT i.id, i.kind, i.owner, it.slot, it.quantity

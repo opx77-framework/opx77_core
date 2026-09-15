@@ -1,3 +1,7 @@
+--- @author DemiAutomatic
+--- @file locales/en.lua
+--- @description English player-facing text and refusal codes of the core.
+
 OPX.Locale.register('en', {
 	['character.limit'] = 'You already have {max} characters.',
 	['character.rowLimit'] = 'This account has created as many characters as it may.',
@@ -56,11 +60,9 @@ OPX.Locale.register('en', {
 
 	['command.inGameOnly'] = 'That command has to be run in game.',
 	['command.usage.select'] = 'usage: /opx77.select <citizenId>',
-	['command.usage.create'] = 'usage: /opx77.create <firstName> <lastName> ' ..
-		'[nomad|streetkid|corpo] [female|male]',
+	['command.usage.create'] = 'usage: /opx77.create <firstName> <lastName> [nomad|streetkid|corpo] [female|male]',
 	['command.usage.delete'] = 'usage: /opx77.delete <citizenId>',
-	['command.usage.money'] = 'usage: /opx77.money <playerId|citizenId> <TYPE> <amount> ' ..
-		'(negative removes)',
+	['command.usage.money'] = 'usage: /opx77.money <playerId|citizenId> <TYPE> <amount> (negative removes)',
 	['command.usage.job'] = 'usage: /opx77.job <playerId|citizenId> <job> [grade]',
 	['command.usage.gang'] = 'usage: /opx77.gang <playerId|citizenId> <gang> [grade]',
 	['command.usage.group'] = 'usage: /opx77.group <job|gang> <name>',

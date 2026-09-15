@@ -1,26 +1,34 @@
---- Commands. `RegisterCommand`'s third argument gates one on the ACL permission
---- `command.<name>`; every unrestricted one takes a doorway cooldown first.
+--- @author DemiAutomatic
+--- @file server/commands.lua
+--- @description The core's commands and their chat autocomplete suggestions.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The server configuration table.
 local Config = OPX.Config.SERVER
 
---- Every command this file registers, in order, with its gate: the suggestions read it, so a
---- command cannot be added without the chat learning whether it is restricted.
----@type { name: string, restricted: boolean }[]
+--- @author DemiAutomatic
+--- @type {table[]}
+--- @description Every registered command in order, with its ACL gate.
 local registered = {}
 
---- `RegisterCommand`, remembering the name and the gate.
----@param name string
----@param handler fun(source: Source, args: table, raw: string)
----@param restricted boolean
+--- @author DemiAutomatic
+--- @method register
+--- @description Registers a command and remembers its name and gate.
+--- @param name {string}
+--- @param handler {fun(source: integer, args: table, raw: string)}
+--- @param restricted {boolean}
 local function register(name, handler, restricted)
 	RegisterCommand(name, handler, restricted)
 	registered[#registered + 1] = { name = name, restricted = restricted }
 end
 
---- Console runs as source 0, which is not a player and has no character.
----@param source Source
----@param raw string
----@return Player|nil
+--- @author DemiAutomatic
+--- @method requirePlayer
+--- @description Answers the caller's loaded Player, or tells them they have none.
+--- @param source {integer}
+--- @param raw {string}
+--- @returns {Player|nil}
 local function requirePlayer(source, raw)
 	local player = OPX.GetPlayer(source)
 	if not player then
@@ -30,37 +38,40 @@ local function requirePlayer(source, raw)
 	return player
 end
 
---- Resolves a command argument that may be a player id or a citizen id.
----@param argument string|nil nil falls back to the caller
----@param fallbackSource Source
----@return Player|nil
+--- @author DemiAutomatic
+--- @method targetOf
+--- @description Resolves a player id or citizen id argument to a loaded Player.
+--- @param argument {string|nil} Nil falls back to the caller.
+--- @param fallbackSource {integer}
+--- @returns {Player|nil}
 local function targetOf(argument, fallbackSource)
 	if argument == nil then return OPX.GetPlayer(fallbackSource) end
 	local asId = tonumber(argument)
 	if asId then return OPX.GetPlayer(asId) end
-	-- the parsed form, never the raw one: a citizen id typed without its separator is still one
 	local parsed = OPX.CitizenId.parse(argument)
 	if not parsed.ok then return nil end
 	return OPX.GetPlayerByCitizenId(parsed.value)
 end
 
---- The doorway guard for an unrestricted command that answers on its own thread.
----@param source Source console callers pass 0, for which `OPX.Cooling` is always false
----@param raw string
----@param key string the SAME `<operation>.request` key the wire doorway takes, so the two
----        entry points share one window; never the operation's own key, which `OPX.Cooling`
----        would then consume and make the operation refuse itself
----@param everyMs integer
----@return boolean refused true when the caller has already been answered
+--- @author DemiAutomatic
+--- @method tooFast
+--- @description Refuses and answers a caller still inside a command's cooldown.
+--- @param source {integer}
+--- @param raw {string}
+--- @param key {string} The wire doorway's request key.
+--- @param everyMs {integer}
+--- @returns {boolean}
 local function tooFast(source, raw, key, everyMs)
 	if not OPX.Cooling(source, key, everyMs) then return false end
 	OPX.CommandNotice(source, raw, 'warning', locale('error.tooFast'))
 	return true
 end
 
+--- @author DemiAutomatic
+--- @command /opx77
+--- @description Lists who is in the world and the boot state.
 register('opx77', function(source, _, raw)
 	local players = OPX.GetPlayers()
-	-- sorted, so two runs of this command can be compared line for line
 	table.sort(players, function(a, b) return a.PlayerData.source < b.PlayerData.source end)
 	local lines = {
 		('opx77_core %s -- %d character(s) in the world, %d session(s) connected')
@@ -79,7 +90,9 @@ register('opx77', function(source, _, raw)
 	OPX.CommandResult(source, raw, true, table.concat(lines, '\n'))
 end, true)
 
---- One player's whole situation, all of it what the SERVER believes.
+--- @author DemiAutomatic
+--- @command /opx77.where
+--- @description Reports everything the server holds on one player.
 register('opx77.where', function(source, args, raw)
 	local target = tonumber(args[1]) or source
 	local session = OPX.Sessions[target]
@@ -106,7 +119,6 @@ register('opx77.where', function(source, args, raw)
 		lines[#lines + 1] = ('  job       : %s %s')
 			:format(data.job.name, data.job.onDuty and '(on duty)' or '')
 		lines[#lines + 1] = ('  gang      : %s'):format(data.gang.name)
-		-- sorted, so two runs of this command can be compared line for line
 		local moneyTypes = {}
 		for moneyType in pairs(data.money) do moneyTypes[#moneyTypes + 1] = moneyType end
 		table.sort(moneyTypes)
@@ -117,7 +129,9 @@ register('opx77.where', function(source, args, raw)
 	OPX.CommandResult(source, raw, true, table.concat(lines, '\n'))
 end, true)
 
---- Prints the caller's position in the exact shape config/shared.lua wants.
+--- @author DemiAutomatic
+--- @command /opx77.here
+--- @description Prints the caller's position as a DEFAULT_SPAWN block.
 register('opx77.here', function(source, _, raw)
 	if source <= 0 then
 		return OPX.CommandResult(source, raw, false, 'opx77.here must be run in game')
@@ -139,6 +153,9 @@ DEFAULT_SPAWN = {
 },]]):format(position.x, position.y, position.z, heading))
 end, true)
 
+--- @author DemiAutomatic
+--- @command /opx77.whois
+--- @description Reports a player's account id and display name.
 register('opx77.whois', function(source, args, raw)
 	local target = tonumber(args[1]) or source
 	local session = OPX.Sessions[target]
@@ -149,6 +166,9 @@ register('opx77.whois', function(source, args, raw)
 		('player %d  user=%s  name=%s'):format(target, session.userId, session.displayName))
 end, true)
 
+--- @author DemiAutomatic
+--- @command /opx77.characters
+--- @description Lists the caller's characters and resends their roster.
 register('opx77.characters', function(source, _, raw)
 	if source <= 0 then
 		return OPX.CommandNotice(source, raw, 'error', locale('command.inGameOnly'))
@@ -169,6 +189,9 @@ register('opx77.characters', function(source, _, raw)
 	end)
 end, false)
 
+--- @author DemiAutomatic
+--- @command /opx77.select
+--- @description Enters the world as one of the caller's characters.
 register('opx77.select', function(source, args, raw)
 	if source <= 0 or not args[1] then
 		return OPX.CommandNotice(source, raw, 'warning', locale('command.usage.select'))
@@ -183,6 +206,9 @@ register('opx77.select', function(source, args, raw)
 	end)
 end, false)
 
+--- @author DemiAutomatic
+--- @command /opx77.create
+--- @description Creates a character on the caller's account.
 register('opx77.create', function(source, args, raw)
 	if source <= 0 or not (args[1] and args[2]) then
 		return OPX.CommandNotice(source, raw, 'warning', locale('command.usage.create'))
@@ -196,13 +222,15 @@ register('opx77.create', function(source, args, raw)
 			gender = args[4] or 'female',
 			birthDate = args[5],
 		})
-		-- the locale line only: this command is UNRESTRICTED and `detail` can be a raw exception
 		OPX.CommandNotice(source, raw, created.ok and 'success' or 'error',
 			created.ok and locale('character.created', { citizenId = created.value.citizenId })
 				or locale(OPX.RefusalKey(created.error)))
 	end)
 end, false)
 
+--- @author DemiAutomatic
+--- @command /opx77.delete
+--- @description Soft-deletes one of the caller's characters.
 register('opx77.delete', function(source, args, raw)
 	if source <= 0 or not args[1] then
 		return OPX.CommandNotice(source, raw, 'warning', locale('command.usage.delete'))
@@ -215,9 +243,11 @@ register('opx77.delete', function(source, args, raw)
 	end)
 end, false)
 
+--- @author DemiAutomatic
+--- @command /opx77.duty
+--- @description Clocks the caller in or out of their primary job.
 register('opx77.duty', function(source, _, raw)
 	local src = tonumber(source) or 0
-	-- unrestricted, and each run costs two full-PlayerData outbound events
 	if src > 0 and OPX.Cooling(src, 'duty', 2000) then
 		return OPX.CommandNotice(src, raw, 'warning', locale('error.tooFast'))
 	end
@@ -225,14 +255,15 @@ register('opx77.duty', function(source, _, raw)
 	if not player then return end
 	CreateThread(function()
 		local toggled = OPX.SetJobDuty(player, not player.PlayerData.job.onDuty)
-		-- a success is already toasted by SetJobDuty itself: `toasted` keeps it to one toast,
-		-- and to the chat line alone on a client that has no toast to show
 		OPX.CommandNotice(source, raw, toggled.ok and 'success' or 'error',
 			toggled.ok and (toggled.value and locale('job.onDuty') or locale('job.offDuty'))
 				or locale(OPX.RefusalKey(toggled.error)), toggled.ok)
 	end)
 end, false)
 
+--- @author DemiAutomatic
+--- @command /opx77.money
+--- @description Gives a loaded character money, or takes it, audited.
 register('opx77.money', function(source, args, raw)
 	local target = targetOf(args[1], source)
 	local moneyType = args[2] and args[2]:upper()
@@ -243,7 +274,6 @@ register('opx77.money', function(source, args, raw)
 
 	local reason = ('staff command by %s'):format(tostring(source))
 
-	-- an if/else: in `a >= 0 and Add() or Remove()` a false from Add runs Remove as well
 	local ok, why
 	if amount >= 0 then
 		ok, why = OPX.AddMoney(target, moneyType, amount, reason)
@@ -251,14 +281,15 @@ register('opx77.money', function(source, args, raw)
 		ok, why = OPX.RemoveMoney(target, moneyType, -amount, reason)
 	end
 
-	-- one params table covers every code the mutators return: `money.insufficient` carries a
-	-- {type} placeholder, the others do not, and a spare parameter is ignored
 	OPX.CommandNotice(source, raw, ok and 'success' or 'error', ok
 		and locale('command.moneySet', { citizenId = target.PlayerData.citizenId,
 			amount = OPX.FormatMoney(target.PlayerData.money[moneyType] or 0, moneyType) })
 		or locale(why or 'error.badRequest', { type = moneyType }))
 end, true)
 
+--- @author DemiAutomatic
+--- @command /opx77.job
+--- @description Sets a character's primary job and grade.
 register('opx77.job', function(source, args, raw)
 	local target = targetOf(args[1], source)
 	if not target or not args[2] then
@@ -273,6 +304,9 @@ register('opx77.job', function(source, args, raw)
 	end)
 end, true)
 
+--- @author DemiAutomatic
+--- @command /opx77.gang
+--- @description Sets a character's primary gang and grade.
 register('opx77.gang', function(source, args, raw)
 	local target = targetOf(args[1], source)
 	if not target or not args[2] then
@@ -287,6 +321,9 @@ register('opx77.gang', function(source, args, raw)
 	end)
 end, true)
 
+--- @author DemiAutomatic
+--- @command /opx77.group
+--- @description Lists the members of a job or a gang.
 register('opx77.group', function(source, args, raw)
 	local groupType, name = args[1], args[2]
 	if groupType ~= 'job' and groupType ~= 'gang' or not name then
@@ -307,7 +344,9 @@ register('opx77.group', function(source, args, raw)
 	end)
 end, true)
 
---- Writes every loaded character back right now, for the minute before a planned restart.
+--- @author DemiAutomatic
+--- @command /opx77.save
+--- @description Writes every loaded character back to the database now.
 register('opx77.save', function(source, _, raw)
 	CreateThread(function()
 		local players = OPX.GetPlayers()
@@ -320,17 +359,26 @@ register('opx77.save', function(source, _, raw)
 	end)
 end, true)
 
--- ---------------------------------------------------------------------------
--- Chat autocomplete
--- ---------------------------------------------------------------------------
-
+--- @author DemiAutomatic
+--- @type {table}
+--- @description Suggestion parameter for a player id or citizen id.
 local TARGET = { name = 'playerId|citizenId', help = 'command.param.target' }
+--- @author DemiAutomatic
+--- @type {table}
+--- @description Optional suggestion parameter for a player id, defaulting to self.
 local PLAYER_OR_SELF = { name = 'playerId', help = 'command.param.playerSelf', optional = true }
+--- @author DemiAutomatic
+--- @type {table}
+--- @description Suggestion parameter for one of the caller's citizen ids.
 local OWN_CITIZEN = { name = 'citizenId', help = 'command.param.ownCitizenId' }
+--- @author DemiAutomatic
+--- @type {table}
+--- @description Optional suggestion parameter for a grade level.
 local GRADE = { name = 'grade', help = 'command.param.grade', optional = true }
 
---- What a player sees while typing, per command: catalogue keys, rendered when the
---- suggestions go out. Parameters are in the order the handler reads `args`.
+--- @author DemiAutomatic
+--- @type {table<string, table>}
+--- @description Help and parameter catalogue keys shown while typing, per command.
 local HELP = {
 	['opx77'] = { text = 'command.help.opx77' },
 	['opx77.where'] = { text = 'command.help.where', params = { PLAYER_OR_SELF } },
@@ -365,11 +413,12 @@ local HELP = {
 	['opx77.save'] = { text = 'command.help.save' },
 }
 
---- Whether the host's ACL grants this player `command.<name>`. False when this host has no
---- ACL reader, so a restricted command is then suggested to nobody rather than to everybody.
----@param player integer
----@param name string
----@return boolean
+--- @author DemiAutomatic
+--- @method permitted
+--- @description Answers whether the host ACL grants a player a command.
+--- @param player {integer}
+--- @param name {string}
+--- @returns {boolean}
 local function permitted(player, name)
 	local acl = Open77.acl
 	if type(acl) ~= 'table' or type(acl.isAllowed) ~= 'function' then return false end
@@ -377,23 +426,23 @@ local function permitted(player, name)
 	return read and allowed == true
 end
 
---- The values the parameter help lines fill in, read from the config as it is now.
----@return table<string, string|number>
+--- @author DemiAutomatic
+--- @method helpValues
+--- @description Builds the placeholder values the parameter help lines fill in.
+--- @returns {table<string, string|number>}
 local function helpValues()
 	local shared = OPX.Config.SHARED
 	local types = {}
 	for moneyType in pairs(shared.MONEY.TYPES) do types[#types + 1] = tostring(moneyType) end
-	-- sorted: `pairs` order would reshuffle the list between two suggestions
 	table.sort(types)
 	local bounds = shared.CHARACTERS.NAME
 	return { types = table.concat(types, ', '), min = bounds.MIN, max = bounds.MAX }
 end
 
---- Suggestions for the chat autocomplete, sent on `chat:ready`: ones sent at boot land
---- nowhere. A restricted command goes only to a player the ACL would let run it: a
---- suggestion is a hint in a text box, not a grant, and the staff list is nobody else's.
+--- @author DemiAutomatic
+--- @event chat:ready
+--- @description Sends the chat the commands this player may run.
 RegisterNetEvent('chat:ready', function()
-	-- cooled like the rest: a net event anyone can send, answered with a few kilobytes
 	local src = tonumber(source)
 	if not src or src <= 0 then return end
 	if OPX.Cooling(src, 'chat_suggestions', 10000) then return end

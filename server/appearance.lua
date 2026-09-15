@@ -1,45 +1,66 @@
---- The character's face: validation, the write, and the broadcast. `opx77_appearance` is a
---- client resource that captures a snapshot and sends it here; nothing else may write it.
+--- @author DemiAutomatic
+--- @file server/appearance.lua
+--- @description The character's face: validation, the stored write and the broadcast.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The success and failure constructors.
 local Result = OPX.Result
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The shared appearance configuration: accepted builds and size ceiling.
 local Config = OPX.Config.SHARED.APPEARANCE
 
 OPX.Appearance = {}
 local Appearance = OPX.Appearance
 
---- The schema version written into every stored snapshot.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description The schema version written into every stored snapshot.
 Appearance.VERSION = 1
 
---- The three parts the engine's catalogue is divided into.
+--- @author DemiAutomatic
+--- @type {table<string, boolean>}
+--- @description The three parts the engine's catalogue is divided into.
 local PARTS = { head = true, body = true, arms = true }
 
---- An option index, and the ceiling on the number of options in one snapshot.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description The ceiling on an option index and its choice count.
 local MAX_CHOICES = 512
+
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description The most options one snapshot may carry.
 local MAX_OPTIONS = 256
 
---- A whole number, never `tonumber("3")`: an option index arriving as a string is a client
---- that has stopped speaking this file's language.
----@param value any
----@return boolean
+--- @author DemiAutomatic
+--- @method isInteger
+--- @description Answers whether a value is a finite whole number.
+--- @param value {any}
+--- @returns {boolean}
 local function isInteger(value)
 	return type(value) == 'number' and OPX.Math.isFinite(value) and value % 1 == 0
 end
 
---- A 64-bit engine identifier as the platform renders one: "0x" and sixteen hex digits,
---- compared lower-cased and never through `tonumber`, which a 64-bit hash does not survive.
----@param value any
----@param allowZero boolean the body family hash may be zero; an option name may not
----@return boolean
+--- @author DemiAutomatic
+--- @method isHash
+--- @description Answers whether a value is a rendered 64-bit engine hash.
+--- @param value {any}
+--- @param allowZero {boolean} True for the body family hash.
+--- @returns {boolean}
 local function isHash(value, allowZero)
 	if type(value) ~= 'string' or #value ~= 18 then return false end
 	if value:sub(1, 2) ~= '0x' or value:sub(3):match('^%x+$') == nil then return false end
 	return allowZero or value ~= '0x0000000000000000'
 end
 
---- The catalogue fingerprint: a SHA-256 digest, lower-cased, or nil.
----@param value any
----@return string|nil
+--- @author DemiAutomatic
+--- @method digest
+--- @description Lower-cases a SHA-256 catalogue fingerprint, or answers nil.
+--- @param value {any}
+--- @returns {string|nil}
 local function digest(value)
 	if type(value) ~= 'string' then return nil end
 	local lowered = value:lower()
@@ -47,17 +68,20 @@ local function digest(value)
 	return lowered
 end
 
---- Whether a game build is one the core will read a stored face back into.
----@param value any
----@return boolean
+--- @author DemiAutomatic
+--- @method OPX.Appearance.buildAccepted
+--- @description Answers whether a stored face may be read into this build.
+--- @param value {any}
+--- @returns {boolean}
 function OPX.Appearance.buildAccepted(value)
 	return type(value) == 'string' and Config.GAME_BUILDS[value] == true
 end
 
---- A snapshot in canonical form -- dense options, lower-cased names, every field the type
---- the column expects -- or nil and the code saying what was wrong with it.
----@param value any
----@return AppearanceSnapshot|nil canonical, string|nil error
+--- @author DemiAutomatic
+--- @method OPX.Appearance.canonical
+--- @description Answers a snapshot in canonical form, or nil and a code.
+--- @param value {any}
+--- @returns {AppearanceSnapshot|nil, string|nil}
 function OPX.Appearance.canonical(value)
 	if type(value) ~= 'table' then return nil, 'invalid_snapshot' end
 	if value.schemaVersion ~= Appearance.VERSION then return nil, 'unsupported_schema' end
@@ -68,8 +92,6 @@ function OPX.Appearance.canonical(value)
 	local catalog = digest(value.catalogDigest)
 	if catalog == nil then return nil, 'invalid_catalog_digest' end
 
-	-- the engine's own body-family hash, opaque and allowed to be zero: not the
-	-- "female"/"male" string, which is `charInfo.gender` and lives on the character row
 	if not isHash(value.gender, true) then return nil, 'invalid_gender' end
 
 	if type(value.options) ~= 'table' then return nil, 'invalid_options' end
@@ -96,8 +118,6 @@ function OPX.Appearance.canonical(value)
 		if not isInteger(option.choices) or option.choices < 0 or option.choices > MAX_CHOICES then
 			return nil, 'invalid_option_choices'
 		end
-		-- `choices = 0` is a catalogue entry with nothing to choose from, which the engine does
-		-- report; it is the one case where the index cannot be bounded by it
 		if option.choices > 0 and option.value >= option.choices then
 			return nil, 'option_out_of_range'
 		end
@@ -112,8 +132,6 @@ function OPX.Appearance.canonical(value)
 		}
 	end
 
-	-- `#value.options` stops at the first hole, so everything above has only proved the PREFIX
-	-- is well formed
 	for key in pairs(value.options) do
 		if type(key) == 'number' and (not isInteger(key) or key < 1 or key > count) then
 			return nil, 'sparse_options'
@@ -123,11 +141,12 @@ function OPX.Appearance.canonical(value)
 	return canonical
 end
 
---- Whether two canonical snapshots are the same face, for skipping a write that would change
---- nothing.
----@param left AppearanceSnapshot|nil
----@param right AppearanceSnapshot|nil
----@return boolean
+--- @author DemiAutomatic
+--- @method OPX.Appearance.same
+--- @description Answers whether two canonical snapshots are the same face.
+--- @param left {AppearanceSnapshot|nil}
+--- @param right {AppearanceSnapshot|nil}
+--- @returns {boolean}
 function OPX.Appearance.same(left, right)
 	if type(left) ~= 'table' or type(right) ~= 'table' then return false end
 	if left.gameBuild ~= right.gameBuild or left.catalogDigest ~= right.catalogDigest then
@@ -143,11 +162,12 @@ function OPX.Appearance.same(left, right)
 	return true
 end
 
---- Validates a captured snapshot, writes it to `opx77_characters.appearance` and puts it on
---- `PlayerData.appearance`. Coroutine only.
----@param identifier Player|Source|CitizenId
----@param snapshot any straight off the wire
----@return Result  ok value is the canonical snapshot
+--- @author DemiAutomatic
+--- @method OPX.SaveAppearance
+--- @description Validates, stores and publishes a character's captured face.
+--- @param identifier {Player|Source|CitizenId}
+--- @param snapshot {any}
+--- @returns {Result}
 function OPX.SaveAppearance(identifier, snapshot)
 	local player = OPX.ResolvePlayer(identifier)
 	if not player then return Result.err('error.notLoggedIn', tostring(identifier)) end
@@ -155,8 +175,6 @@ function OPX.SaveAppearance(identifier, snapshot)
 	local canonical, reason = Appearance.canonical(snapshot)
 	if not canonical then return Result.err('appearance.invalid', reason) end
 
-	-- before the encode: two identical canonical snapshots encode to the same bytes, so the
-	-- size check below cannot answer differently for a face that is already stored
 	local data = player.PlayerData
 	if Appearance.same(data.appearance, canonical) then return Result.ok(data.appearance) end
 
@@ -181,9 +199,11 @@ function OPX.SaveAppearance(identifier, snapshot)
 	return Result.ok(canonical)
 end
 
---- The stored face for a character, online or not. Coroutine only when offline.
----@param identifier Player|Source|CitizenId
----@return Result  ok value is an AppearanceSnapshot, or nil for a character with no face
+--- @author DemiAutomatic
+--- @method OPX.GetAppearance
+--- @description Answers the stored face for a character, online or not.
+--- @param identifier {Player|Source|CitizenId}
+--- @returns {Result}
 function OPX.GetAppearance(identifier)
 	local player = OPX.ResolvePlayer(identifier)
 	if player then return Result.ok(player.PlayerData.appearance) end
@@ -196,8 +216,10 @@ function OPX.GetAppearance(identifier)
 	return Result.ok(fetched.value.appearance)
 end
 
---- What `opx77_appearance` sends after the player commits a face. The character comes from
---- the connection and never from the payload.
+--- @author DemiAutomatic
+--- @event opx77:server:saveAppearance
+--- @description Stores the face opx77_appearance captured for the connection's character.
+--- @param payload {any}
 RegisterNetEvent(OPX.Events.Server.SAVE_APPEARANCE, function(payload)
 	local src = tonumber(source)
 	if not src then return end

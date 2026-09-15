@@ -245,3 +245,13 @@
 ---@field source Source|nil
 ---@field citizenId CitizenId|nil
 ---@field at integer            the core's clock, milliseconds
+
+--- One audit log entry, the argument of OPX.Logger.log.
+---@class LogEntry
+---@field event string      stable and greppable: "money.remove", "character.delete"
+---@field severity string|nil
+---@field message string|nil
+---@field source integer|nil
+---@field citizenId string|nil
+---@field userId string|nil
+---@field data table|nil

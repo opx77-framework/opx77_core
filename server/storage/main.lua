@@ -1,17 +1,32 @@
---- Database access. Every call yields, so every one must be made from inside a CreateThread.
---- Named parameters throughout: the bridge rewrites `?` by scanning the statement.
+--- @author DemiAutomatic
+--- @file server/storage/main.lua
+--- @description Database access through the MySQL bridge, answering Result values.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The Result constructors every call answers with.
 local Result = OPX.Result
 
 OPX.Storage = {}
 local Storage = OPX.Storage
 
---- nil until probed, then true or false for the rest of the run.
+--- @author DemiAutomatic
+--- @type {boolean|nil}
+--- @description Whether the database answered its probe; nil until probed.
 local ready = nil
+
+--- @author DemiAutomatic
+--- @type {string}
+--- @description Why the database is or is not ready.
 local readyReason = 'not probed'
 
---- Runs one bridge method and blocks until it answers. `MySQL.<method>.await` raises rather
---- than answering `value, reason`, and a raise inside a CreateThread kills it silently.
+--- @author DemiAutomatic
+--- @method run
+--- @description Runs one bridge method, turning a raise into a Result.
+--- @param method {string}
+--- @param sql {string}
+--- @param params {table|nil}
+--- @returns {Result}
 local function run(method, sql, params)
 	local api = rawget(_G, 'MySQL')
 	local fn = api and api[method]
@@ -23,46 +38,62 @@ local function run(method, sql, params)
 	if not ok then
 		return Result.err('query-failed', tostring(value))
 	end
-	-- a nil value is an empty result, not a failure: `single` answers nil for "no such row"
 	return Result.ok(value)
 end
 
----@param sql string
----@param params? table
----@return Result  ok value is a list of rows
+--- @author DemiAutomatic
+--- @method OPX.Storage.query
+--- @description Runs a statement answering a list of rows.
+--- @param sql {string}
+--- @param params {table|nil}
+--- @returns {Result}
 function OPX.Storage.query(sql, params) return run('query', sql, params) end
 
----@param sql string
----@param params? table
----@return Result  ok value is one row, or nil
+--- @author DemiAutomatic
+--- @method OPX.Storage.single
+--- @description Runs a statement answering one row, or nil.
+--- @param sql {string}
+--- @param params {table|nil}
+--- @returns {Result}
 function OPX.Storage.single(sql, params) return run('single', sql, params) end
 
----@param sql string
----@param params? table
----@return Result  ok value is one column of one row, or nil
+--- @author DemiAutomatic
+--- @method OPX.Storage.scalar
+--- @description Runs a statement answering one column of one row.
+--- @param sql {string}
+--- @param params {table|nil}
+--- @returns {Result}
 function OPX.Storage.scalar(sql, params) return run('scalar', sql, params) end
 
----@param sql string
----@param params? table
----@return Result  ok value is the inserted id
+--- @author DemiAutomatic
+--- @method OPX.Storage.insert
+--- @description Runs an insert answering the inserted id.
+--- @param sql {string}
+--- @param params {table|nil}
+--- @returns {Result}
 function OPX.Storage.insert(sql, params) return run('insert', sql, params) end
 
---- Also the right method for DDL.
----@param sql string
----@param params? table
----@return Result  ok value is the number of rows affected
+--- @author DemiAutomatic
+--- @method OPX.Storage.update
+--- @description Runs a write or DDL statement answering the rows affected.
+--- @param sql {string}
+--- @param params {table|nil}
+--- @returns {Result}
 function OPX.Storage.update(sql, params) return run('update', sql, params) end
 
---- Alias for `update`, for statements whose return value nobody reads.
----@param sql string
----@param params? table
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.execute
+--- @description Runs a write whose answer nobody reads, like update.
+--- @param sql {string}
+--- @param params {table|nil}
+--- @returns {Result}
 function OPX.Storage.execute(sql, params) return run('update', sql, params) end
 
---- Committed or rolled back as one unit. Separate from `run` because this is the one method
---- that resolves `false, reason` instead of raising, so `run` would read a rollback as a win.
----@param statements ({ query: string, values: table }|string)[]
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.transaction
+--- @description Commits several statements as one unit, or none of them.
+--- @param statements {table[]}
+--- @returns {Result}
 function OPX.Storage.transaction(statements)
 	local api = rawget(_G, 'MySQL')
 	local fn = api and api.transaction
@@ -80,9 +111,10 @@ function OPX.Storage.transaction(statements)
 	return Result.ok(true)
 end
 
---- Whether the database answered, with the reason if it did not. Probes once, then caches.
---- Coroutine only.
----@return boolean ready, string reason
+--- @author DemiAutomatic
+--- @method OPX.Storage.ready
+--- @description Probes the database once and answers whether it answered.
+--- @returns {boolean, string}
 function OPX.Storage.ready()
 	if ready ~= nil then return ready, readyReason end
 
@@ -101,15 +133,16 @@ function OPX.Storage.ready()
 	return true, readyReason
 end
 
---- The optional migrations that failed this run, by name. Never recorded, so the next start
---- tries them again; what reads their tables asks here first.
----@type table<string, boolean>
+--- @author DemiAutomatic
+--- @type {table<string, boolean>}
+--- @description Optional migrations that failed this run, by name.
 Storage.skipped = {}
 
---- Applies pending migrations in order, keyed by name and never by position. Stops at the
---- first failure rather than leaving a half-applied schema, unless the migration is optional.
----@param migrations Migration[]
----@return Result  ok value is the number applied
+--- @author DemiAutomatic
+--- @method OPX.Storage.migrate
+--- @description Applies pending migrations in order, keyed by their name.
+--- @param migrations {Migration[]}
+--- @returns {Result}
 function OPX.Storage.migrate(migrations)
 	local created = Storage.execute([[
 CREATE TABLE IF NOT EXISTS opx77_migrations (

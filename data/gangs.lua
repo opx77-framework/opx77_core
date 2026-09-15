@@ -1,5 +1,6 @@
--- Gangs. Same rules as data/jobs.lua: the key is stored on the character row, so add freely
--- and rename never. `none` is the absence of a gang, kept as an entry so nothing handles nil.
+--- @author DemiAutomatic
+--- @file data/gangs.lua
+--- @description Gang definitions, keyed by the durable name stored on characters.
 
 OPX.Gangs = {
 	none = {

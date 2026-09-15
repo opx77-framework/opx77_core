@@ -1,15 +1,14 @@
+--- @author DemiAutomatic
+--- @file open77.lua
+--- @description Resource manifest declaring scripts, permissions and reload policy.
+
 resource "opx77_core"
 version "0.5.0"
 open77_version ">=0.0.1"
 auto_start true
 
-reload_policy "local" -- a reload is a script reload, not a reconnect: both halves rebuild
+reload_policy "local"
 
--- No dependencies declared: a declared dependency is hard, and this core must install on a
--- bare server.
-
--- The OPX namespace. shared/main.lua creates it, the files below fill it in.
--- Order inside this block is dependency order.
 shared_script "shared/main.lua"
 shared_script "shared/result.lua"
 shared_script "shared/table.lua"
@@ -18,20 +17,18 @@ shared_script "shared/math.lua"
 shared_script "shared/validate.lua"
 shared_script "shared/hooks.lua"
 
--- Configuration. The only files a server owner edits.
-shared_script "config/shared.lua" -- shipped to every client: never put a secret in it
+shared_script "config/shared.lua"
 server_script "config/server.lua"
 server_script "config/vehicles.lua"
 client_script "config/client.lua"
 
--- Static data. Definitions, not settings: changing one renames things players already hold.
 shared_script "data/jobs.lua"
 shared_script "data/gangs.lua"
 shared_script "data/origins.lua"
 
 shared_script "shared/locale.lua"
-shared_script "locales/en.lua" -- registered right after the catalogue, so no file below calls
-shared_script "locales/fr.lua" -- locale() against an empty one
+shared_script "locales/en.lua"
+shared_script "locales/fr.lua"
 shared_script "shared/citizenid.lua"
 shared_script "shared/functions.lua"
 
@@ -41,55 +38,42 @@ server_script "server/storage/schema.lua"
 server_script "server/storage/players.lua"
 server_script "server/storage/vehicles.lua"
 server_script "server/storage/inventories.lua"
-server_script "server/logger.lua" -- after storage, because it writes through it
+server_script "server/logger.lua"
 server_script "server/main.lua"
-server_script "server/functions.lua" -- the getters: every file below reaches for OPX.GetPlayer
-server_script "server/buckets.lua" -- before player.lua: a logout and a placement move buckets
+server_script "server/functions.lua"
+server_script "server/buckets.lua"
 server_script "server/player.lua"
-server_script "server/groups.lua" -- after player.lua: a group change writes through the Player
+server_script "server/groups.lua"
 server_script "server/character.lua"
-server_script "server/lifecycle.lua" -- after character.lua: the gate releases by loading one
-server_script "server/appearance.lua" -- after character.lua: it writes a character column
-server_script "server/clothing.lua" -- after storage: it writes the clothing table
-server_script "server/vehicles.lua" -- after character.lua: ownership reads PlayerData
+server_script "server/lifecycle.lua"
+server_script "server/appearance.lua"
+server_script "server/clothing.lua"
+server_script "server/vehicles.lua"
 server_script "server/events.lua"
 server_script "server/commands.lua"
 server_script "server/loops.lua"
-server_script "server/exports.lua" -- last: publishing the surface claims everything it reads
+server_script "server/exports.lua"
 
 client_script "client/main.lua"
 client_script "client/functions.lua"
 client_script "client/character.lua"
 client_script "client/events.lua"
 client_script "client/loops.lua"
-client_script "client/exports.lua" -- last: publishing the surface claims everything it reads
+client_script "client/exports.lua"
 
 permissions {
-  "network.events", -- RegisterNetEvent and TriggerClientEvent; local.events is not needed
+  "network.events",
 
-  -- Open77.database. Safe on a server with no database: OPX.Storage degrades to one logged
-  -- line and a refusal to log anybody in.
   "database.access",
 
-  "players.life.read", -- acting on a client that is not incarnated crashes it
+  "players.life.read",
 
-  -- placement is kill -> respawn, never a transform write: respawn carries the fade and the
-  -- streaming preload that a teleport skips
   "players.life.kill",
   "players.life.respawn",
-  "players.life.revive", -- the recovery for a kill whose respawn then failed
+  "players.life.revive",
 
-  "players.damage.apply", -- armour is re-applied after respawn; nothing here reads it back
-  "world.vehicles", -- spawning a character's own car, and writing back what happened to it
+  "players.damage.apply",
+  "world.vehicles",
 
-  -- Open77.acl.isAllowed, read-only: a restricted command is suggested in the chat only to a
-  -- player the ACL would let run it. Nothing here grants, and no handler checks it: the host
-  -- resolves command.<name> before a handler runs.
   "acl.read",
-
-  -- Deliberately not requested: world.props, world.elevators, combat.config,
-  -- players.damage.read, players.disconnect.
-
-  -- Nothing to request: `Open77.routingBuckets`, which keeps a player choosing a character in
-  -- a bucket of their own, is installed for every server resource and has no permission.
 }

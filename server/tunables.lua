@@ -1,8 +1,15 @@
---- Numbers an operator may change from the Warden panel while people are playing. Read
---- `OPX.Tune.KEY` at the point of use: a file-scope local freezes for the life of the run.
+--- @author DemiAutomatic
+--- @file server/tunables.lua
+--- @description Live operator values declared to the host's tunables panel.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The server configuration the tunables default to.
 local Config = OPX.Config.SERVER
 
+--- @author DemiAutomatic
+--- @type {table<string, table>}
+--- @description Every tunable with its bounds, label and panel description.
 local DECLARATION = {
 	AUTOSAVE_SECONDS = {
 		value = Config.AUTOSAVE_SECONDS,
@@ -58,8 +65,6 @@ local DECLARATION = {
 
 	SELECTION_MS = {
 		value = Config.ENTRY.PIPELINE_MS,
-		-- ceiling is PIPELINE_MS, below GATE_MS: the core never refreshes its gate hold, so a
-		-- longer selection would have the host declare it dead mid-screen
 		type = 'integer', min = 30000, max = Config.ENTRY.PIPELINE_MS, step = 15000,
 		unit = 'ms', apply = 'live',
 		label = 'Character selection deadline', group = 'Characters', order = 2,
@@ -71,17 +76,19 @@ local DECLARATION = {
 	},
 }
 
---- The fallback for a host with no tunables support, built from the same declaration so a key
---- cannot exist in one and not the other.
+--- @author DemiAutomatic
+--- @type {table<string, any>}
+--- @description Declared values, the fallback for a host without tunables.
 local defaults = {}
 for key, entry in pairs(DECLARATION) do defaults[key] = entry.value end
 
---- A binary predating tunables has no `Open77.tunables` at all. Detected once, here.
+--- @author DemiAutomatic
+--- @type {boolean}
+--- @description Whether this host installs Open77.tunables at all.
 local HAS_TUNABLES = type(Open77.tunables) == 'table'
 	and type(Open77.tunables.declare) == 'function'
 
 if HAS_TUNABLES then
-	-- declare raises, and that is wanted: better than running on a value the panel cannot set
 	OPX.Tune = Open77.tunables.declare(DECLARATION)
 else
 	OPX.Tune = defaults
@@ -89,15 +96,14 @@ else
 		'values as fixed')
 end
 
---- Re-reads a value with a floor. The panel enforces min and max, but a host without
---- tunables hands back whatever config/server.lua says.
----@param key string
----@param floor number also the answer for a key with no declaration, so no caller is handed
----        a nil to compare against a number
----@return number
+--- @author DemiAutomatic
+--- @method OPX.TuneNumber
+--- @description Reads a tunable as a finite number, never below a floor.
+--- @param key {string}
+--- @param floor {number} Also the answer for an undeclared key.
+--- @returns {number}
 function OPX.TuneNumber(key, floor)
 	local value = OPX.Tune[key]
-	-- isFinite, not `value ~= value`: an infinity passes a NaN test and freezes an interval
 	if not OPX.Math.isFinite(value) then value = defaults[key] end
 	if not OPX.Math.isFinite(value) then return floor end
 	if floor and value < floor then return floor end

@@ -1,27 +1,40 @@
---- The selection bucket: a player with no character loaded waits in a routing bucket of their
---- own, so nobody choosing a character sees anybody else or is seen. See README, "The selection
---- bucket".
----
---- A bucket move is not a placement. It changes which bodies, props and vehicles the host
---- replicates to and from a player; it does not write the transform, the life state or the
---- puppet, which are what the readiness gate protects a non-incarnated client from. So it is
---- done while the gate is closed, from the first moment the core knows the player.
+--- @author DemiAutomatic
+--- @file server/buckets.lua
+--- @description Isolates players without a character in a routing bucket of their own.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The server configuration, read for ENTRY.BUCKET.
 local Config = OPX.Config.SERVER
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The selection bucket module.
 OPX.Buckets = {}
+
+--- @author DemiAutomatic
+--- @type {table}
+--- @description Short alias of the selection bucket module.
 local Buckets = OPX.Buckets
 
---- The host's bucket ids are uint32, and player ids are small recycled integers. A selection
---- bucket is BASE + id, so the whole range is BASE + 1 .. BASE + ID_SPAN.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description The largest bucket id the host accepts.
 local UINT32_MAX = 4294967295
+
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description The largest player id that has a selection bucket.
 local ID_SPAN = 65535
 
+--- @author DemiAutomatic
+--- @type {table<string, boolean>}
+--- @description The entity lockdown modes the host accepts.
 local LOCKDOWN_MODES = { inactive = true, relaxed = true, strict = true, full = true }
 
---- Operator configuration, resolved once at load; a bad value is said once and the shipped one
---- used. `isolate` false turns the whole feature off: nobody is moved, and a stored bucket is
---- honoured as it always was.
+--- @author DemiAutomatic
+--- @type {boolean, integer, integer, boolean, string|nil}
+--- @description The bucket configuration as validated once at load.
 local isolate, base, world, population, lockdown = true, 77000, 0, false, 'relaxed'
 do
 	local wanted = type(Config.ENTRY) == 'table' and Config.ENTRY.BUCKET or nil
@@ -38,6 +51,13 @@ do
 		Open77.log.warn('[bucket] ENTRY.BUCKET.ISOLATE is not a boolean: players are isolated')
 	end
 
+	--- @author DemiAutomatic
+	--- @method integer
+	--- @description Answers whether a value is a whole number within bounds.
+	--- @param value {any}
+	--- @param low {number}
+	--- @param high {number}
+	--- @returns {boolean}
 	local function integer(value, low, high)
 		return OPX.Math.isFinite(value) and value % 1 == 0 and value >= low and value <= high
 	end
@@ -83,8 +103,9 @@ do
 	end
 end
 
---- The namespaced API where the host installs it, the globals otherwise. Both are
---- documented as equivalent, and neither needs a manifest permission.
+--- @author DemiAutomatic
+--- @type {table<string, function|nil>}
+--- @description The host's routing bucket functions, namespaced or global.
 local api = {}
 do
 	local ns = type(Open77.routingBuckets) == 'table' and Open77.routingBuckets or {}
@@ -100,26 +121,32 @@ do
 	end
 end
 
---- Selection buckets whose policy this VM has already set. The policy is per bucket and
---- outlives the player, so it is set once per bucket, and again after a reload.
----@type table<integer, boolean>
+--- @author DemiAutomatic
+--- @type {table<integer, boolean>}
+--- @description Selection buckets whose policy this VM has already set.
 local prepared = {}
 
---- Whether players choosing a character are isolated at all on this server.
----@return boolean
+--- @author DemiAutomatic
+--- @method OPX.Buckets.enabled
+--- @description Answers whether players choosing a character are isolated at all.
+--- @returns {boolean}
 function OPX.Buckets.enabled()
 	return isolate
 end
 
---- The bucket a character goes to when nothing else names one.
----@return integer
+--- @author DemiAutomatic
+--- @method OPX.Buckets.world
+--- @description Answers the bucket a character goes to by default.
+--- @returns {integer}
 function OPX.Buckets.world()
 	return world
 end
 
---- A player's own selection bucket, or nil when isolation is off or the id cannot have one.
----@param source Source
----@return integer|nil
+--- @author DemiAutomatic
+--- @method OPX.Buckets.selectionOf
+--- @description Answers a player's own selection bucket, or nil.
+--- @param source {Source}
+--- @returns {integer|nil}
 function OPX.Buckets.selectionOf(source)
 	source = tonumber(source)
 	if not isolate or not source or source < 1 or source > ID_SPAN or source % 1 ~= 0 then
@@ -128,27 +155,31 @@ function OPX.Buckets.selectionOf(source)
 	return base + source
 end
 
---- Whether a bucket id is in the selection range. Answered even with isolation off, so a
---- stored position left there by an earlier configuration is still recognised.
----@param bucket any
----@return boolean
+--- @author DemiAutomatic
+--- @method OPX.Buckets.isSelection
+--- @description Answers whether a bucket id lies in the selection range.
+--- @param bucket {any}
+--- @returns {boolean}
 function OPX.Buckets.isSelection(bucket)
 	return type(bucket) == 'number' and bucket > base and bucket <= base + ID_SPAN
 end
 
---- The bucket a player is in, or nil where the host cannot say.
----@param source Source
----@return integer|nil
+--- @author DemiAutomatic
+--- @method OPX.Buckets.current
+--- @description Answers the bucket a player is in, or nil.
+--- @param source {Source}
+--- @returns {integer|nil}
 function OPX.Buckets.current(source)
 	if type(api.getPlayer) ~= 'function' then return nil end
 	local read, bucket = pcall(api.getPlayer, source)
 	return read and tonumber(bucket) or nil
 end
 
---- Where a stored position puts a character: the bucket it names, unless that is a selection
---- bucket, which belongs to whoever holds that player id now and never to a character.
----@param stored any the `bucket` of a stored Position
----@return integer
+--- @author DemiAutomatic
+--- @method OPX.Buckets.placementOf
+--- @description Answers the bucket a stored position places a character in.
+--- @param stored {any} The bucket of a stored Position.
+--- @returns {integer}
 function OPX.Buckets.placementOf(stored)
 	local bucket = tonumber(stored)
 	if bucket == nil or bucket % 1 ~= 0 or bucket < 0 or bucket > UINT32_MAX then return world end
@@ -156,12 +187,13 @@ function OPX.Buckets.placementOf(stored)
 	return bucket
 end
 
---- Move one player. Logged at debug either way; a refusal also at warn, since a player then
---- waits in, or enters, the wrong world.
----@param source Source
----@param bucket integer
----@param why string
----@return boolean moved
+--- @author DemiAutomatic
+--- @method OPX.Buckets.move
+--- @description Moves one player to a bucket, logging the move or refusal.
+--- @param source {Source}
+--- @param bucket {integer}
+--- @param why {string}
+--- @returns {boolean}
 function OPX.Buckets.move(source, bucket, why)
 	if type(api.setPlayer) ~= 'function' then return false end
 	local from = Buckets.current(source)
@@ -177,9 +209,10 @@ function OPX.Buckets.move(source, bucket, why)
 	return false
 end
 
---- Set a selection bucket's policy: no ambient population, and the configured lockdown, as the
---- platform's own isolated rounds are prepared.
----@param bucket integer
+--- @author DemiAutomatic
+--- @method prepare
+--- @description Sets a selection bucket's population and lockdown policy once.
+--- @param bucket {integer}
 local function prepare(bucket)
 	if prepared[bucket] then return end
 	prepared[bucket] = true
@@ -191,12 +224,12 @@ local function prepare(bucket)
 	end
 end
 
---- Put a player with no character in their own selection bucket. Refused for a player who has
---- one loaded or is leaving: the first is in the world, the second may already hand their id
---- to somebody else.
----@param source Source
----@param why string
----@return boolean isolated
+--- @author DemiAutomatic
+--- @method OPX.Buckets.isolate
+--- @description Moves a player without a character into their selection bucket.
+--- @param source {Source}
+--- @param why {string}
+--- @returns {boolean}
 function OPX.Buckets.isolate(source, why)
 	local bucket = Buckets.selectionOf(source)
 	if bucket == nil then return false end
@@ -206,12 +239,12 @@ function OPX.Buckets.isolate(source, why)
 	return Buckets.move(source, bucket, why)
 end
 
---- Take a player out of their selection bucket into the world one. Nothing happens to a player
---- who is not in it, so a bucket another resource chose since is left alone.
----@param source Source
----@param why string
----@return boolean released  true also when there was nothing to release
----@return boolean moved     whether a move was made
+--- @author DemiAutomatic
+--- @method OPX.Buckets.release
+--- @description Moves a player out of their selection bucket into the world.
+--- @param source {Source}
+--- @param why {string}
+--- @returns {boolean, boolean}
 function OPX.Buckets.release(source, why)
 	local current = Buckets.current(source)
 	if current == nil or not Buckets.isSelection(current) then return true, false end
@@ -219,8 +252,10 @@ function OPX.Buckets.release(source, why)
 	return moved, moved
 end
 
---- A stop hands back what the core took: nobody is left in a bucket no running resource knows
---- about. A reload re-isolates, from the client's READY, whoever is still behind the gate.
+--- @author DemiAutomatic
+--- @event onResourceStop
+--- @description Moves everybody out of a selection bucket when the core stops.
+--- @param name {string}
 AddEventHandler('onResourceStop', function(name)
 	if name ~= GetCurrentResourceName() then return end
 	local count = 0

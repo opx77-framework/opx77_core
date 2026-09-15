@@ -1,5 +1,6 @@
--- Lifepaths, offered at character creation. Validated against this list, stored on
--- `PlayerData.charInfo.origin`, and never read again by the core.
+--- @author DemiAutomatic
+--- @file data/origins.lua
+--- @description Lifepaths offered at character creation.
 
 OPX.Origins = {
 	nomad = {

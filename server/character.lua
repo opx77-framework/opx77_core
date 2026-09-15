@@ -1,22 +1,36 @@
---- Multicharacter: the roster, creation, deletion, selection and placement. Everything here
---- yields -- coroutine only.
+--- @author DemiAutomatic
+--- @file server/character.lua
+--- @description Multicharacter: the roster, creation, deletion, selection and placement.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The success and failure constructors.
 local Result = OPX.Result
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The configuration both runtimes read.
 local Shared = OPX.Config.SHARED
+
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The server-only configuration of the core.
 local Config = OPX.Config.SERVER
 
---- How many characters this account may hold.
----@param userId UserId
----@return integer
+--- @author DemiAutomatic
+--- @method slotsFor
+--- @description Answers how many characters an account may hold.
+--- @param userId {UserId}
+--- @returns {integer}
 local function slotsFor(userId)
 	return Config.CHARACTERS.SLOTS_BY_USER[userId] or OPX.TuneNumber('CHARACTER_SLOTS', 1)
 end
 
---- Deliberately not the whole entity: money, metadata and stored position are nobody's
---- business until a character is loaded, including the account owner's.
----@param entity table
----@return CharacterSummary
+--- @author DemiAutomatic
+--- @method toSummary
+--- @description Trims a character entity to what the selection screen shows.
+--- @param entity {table}
+--- @returns {CharacterSummary}
 local function toSummary(entity)
 	return {
 		citizenId = entity.citizenId,
@@ -31,16 +45,13 @@ local function toSummary(entity)
 	}
 end
 
---- Loads the account and sends its character list. Safe to run twice: a reload empties this
---- VM's roster and the client re-announces itself.
----@param source Source
----@param pushed? boolean  the core's own send on connect, which neither is cooled nor cools
----@return Result  ok value is a list of CharacterSummary
+--- @author DemiAutomatic
+--- @method OPX.SendCharacters
+--- @description Records the account and sends its character roster to the client.
+--- @param source {Source}
+--- @param pushed {boolean|nil} The core's own send on connect.
+--- @returns {Result}
 function OPX.SendCharacters(source, pushed)
-	-- cooled here, not at a doorway: also reachable from the unrestricted `/opx77.characters`.
-	-- The push on connect goes out before the client's resources run, so it usually lands
-	-- nowhere; were it to cool, the client's own READY a second later would be dropped with it
-	-- and the roster would not arrive until a retry, after the world had loaded.
 	if not pushed and OPX.Cooling(source, 'roster', 2000) then
 		return Result.err('error.tooFast', tostring(source))
 	end
@@ -73,10 +84,11 @@ function OPX.SendCharacters(source, pushed)
 	return Result.ok(summaries)
 end
 
---- Checks a registration off the wire. The account is taken from the session and never from
---- the payload: `source` is the only value a client cannot forge.
----@param payload any
----@return Result  ok value is { firstName, lastName, origin, gender, birthDate }
+--- @author DemiAutomatic
+--- @method validateRegistration
+--- @description Checks a character registration received from a client.
+--- @param payload {any}
+--- @returns {Result}
 local function validateRegistration(payload)
 	if type(payload) ~= 'table' then
 		return Result.err('error.badRequest', 'payload is not a table')
@@ -94,7 +106,6 @@ local function validateRegistration(payload)
 	local gender = OPX.Validate.oneOf(payload.gender, { female = true, male = true })
 	if not gender.ok then return Result.err('error.badRequest', 'gender') end
 
-	-- shape-checked, never parsed: the sandbox removes `os`, so there is no clock to check
 	local birthDate = OPX.Validate.text(payload.birthDate, {
 		min = 8, max = 10, pattern = '^%d%d%d%d%-%d%d%-%d%d$',
 	})
@@ -108,11 +119,12 @@ local function validateRegistration(payload)
 	})
 end
 
---- Creates a character on the caller's own account. A citizen id collision is settled by the
---- unique key on the column rather than by a SELECT beforehand.
----@param source Source
----@param payload table
----@return Result  ok value is a CharacterSummary
+--- @author DemiAutomatic
+--- @method OPX.CreateCharacter
+--- @description Creates a character on the caller's own account.
+--- @param source {Source}
+--- @param payload {table}
+--- @returns {Result}
 function OPX.CreateCharacter(source, payload)
 	local session = OPX.EnsureSession(source)
 	if not session then return Result.err('entry.noIdentity', tostring(source)) end
@@ -122,15 +134,12 @@ function OPX.CreateCharacter(source, payload)
 	if not checked.ok then return checked end
 	local registration = checked.value
 
-	-- cooled AFTER validation: the cooldown guards the write, not a mistyped name
 	if OPX.Cooling(source, 'create', 3000) then
 		return Result.err('error.tooFast', tostring(source))
 	end
 
-	-- rows, not characters: the soft delete keeps the row while `nextCid` frees the slot
 	local rows = OPX.Storage.Players.countRows(session.userId)
 	if not rows.ok then return rows end
-	-- 5 is the FLOOR argument, not a default: TuneNumber falls back to the config value
 	local ceiling = OPX.TuneNumber('CHARACTER_ROWS', 5)
 	if rows.value >= ceiling then
 		Open77.log.warn(('[character] %s has %d character rows, at the ceiling of %d')
@@ -177,7 +186,6 @@ function OPX.CreateCharacter(source, payload)
 		local inserted = OPX.Storage.Players.insert(entity)
 		if inserted.ok then break end
 
-		-- only a collision is worth another draw: anything else would fail five times over
 		if not tostring(inserted.detail or ''):lower():find('duplicate') then
 			return inserted
 		end
@@ -187,14 +195,10 @@ function OPX.CreateCharacter(source, payload)
 		Open77.log.warn('[character] citizen id collision, drawing another')
 	end
 
-	-- not optional: `OPX.SetPlayerPrimaryJob` checks the membership row, so a character without
-	-- one is refused its own default job forever
 	local jobRow = OPX.Storage.Players.upsertGroup(entity.citizenId, 'job', entity.job.name, 0)
 	local gangRow = OPX.Storage.Players.upsertGroup(entity.citizenId, 'gang', entity.gang.name, 0)
 	if not jobRow.ok or not gangRow.ok then
 		local failed = not jobRow.ok and jobRow or gangRow
-		-- undone rather than handed back: the row is seconds old, holds nothing, and the
-		-- membership foreign key is ON DELETE CASCADE
 		local undone = OPX.Storage.execute(
 			'DELETE FROM opx77_characters WHERE citizen_id = @citizen',
 			{ citizen = entity.citizenId })
@@ -219,13 +223,13 @@ function OPX.CreateCharacter(source, payload)
 	return Result.ok(toSummary(entity))
 end
 
---- Deletes one of the caller's own characters. Soft: the row is marked rather than removed,
---- so the citizen id is never reissued. Rows in `CHARACTERS.CASCADE_TABLES` go for real.
----@param source Source
----@param citizenId CitizenId
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.DeleteCharacter
+--- @description Soft-deletes one of the caller's own characters.
+--- @param source {Source}
+--- @param citizenId {CitizenId}
+--- @returns {Result}
 function OPX.DeleteCharacter(source, citizenId)
-	-- every refused delete writes a security row, so this guards the audit trail too
 	if OPX.Cooling(source, 'delete', 3000) then
 		return Result.err('error.tooFast', tostring(source))
 	end
@@ -242,11 +246,9 @@ function OPX.DeleteCharacter(source, citizenId)
 		OPX.Logger.security('character.deleteRefused',
 			('player %d tried to delete %s'):format(source, citizenId),
 			{ userId = session.userId, owner = fetched.value.userId }, source)
-		-- the SAME code a missing character gets: "not yours" is an existence oracle
 		return Result.err('character.notFound', citizenId)
 	end
 
-	-- out of the world first, or the autosave writes the row back a minute later
 	local online = OPX.GetPlayerByCitizenId(citizenId)
 	if online then OPX.Logout(online.PlayerData.source) end
 
@@ -256,7 +258,6 @@ function OPX.DeleteCharacter(source, citizenId)
 	local cascades = Config.CHARACTERS.CASCADE_TABLES
 	for i = 1, #cascades do
 		local target = cascades[i]
-		-- built by concatenation because a parameter cannot stand in for an identifier
 		OPX.Storage.execute(
 			('DELETE FROM %s WHERE %s = @citizen'):format(target[1], target[2]),
 			{ citizen = citizenId })
@@ -269,30 +270,32 @@ function OPX.DeleteCharacter(source, citizenId)
 		userId = session.userId,
 		source = source,
 	})
-	-- the change cursor in server/exports.lua carries it to other server resources
 	TriggerEvent(OPX.Events.Internal.CHARACTER_DELETED, source, citizenId)
 	return Result.ok(citizenId)
 end
 
---- True once the platform's view of a player has stopped moving. Placing somebody
---- mid-transition is how a respawn lands on top of another one.
----@param life table|nil what `Open77.players.getLifeState` answered
----@return boolean
+--- @author DemiAutomatic
+--- @method isSettled
+--- @description Answers whether a life state is alive or dead, not transitioning.
+--- @param life {table|nil}
+--- @returns {boolean}
 local function isSettled(life)
 	return type(life) == 'table' and (life.phase == 'alive' or life.phase == 'dead')
 end
 
---- The one place `MaySample` is turned on. Never turned off: a character placed correctly and
---- then failing a second attempt is still standing where they belong.
----@param player Player
+--- @author DemiAutomatic
+--- @method allowSampling
+--- @description Lets the position sampler write this character's position.
+--- @param player {Player}
 local function allowSampling(player)
 	player.MaySample = true
 end
 
---- Puts a loaded character where they belong: kill then respawn, never a raw transform. Every
---- failing exit leaves `MaySample` false.
----@param player Player
----@return boolean placed, string? reason
+--- @author DemiAutomatic
+--- @method OPX.PlaceCharacter
+--- @description Places a loaded character by kill then respawn, never a transform.
+--- @param player {Player}
+--- @returns {boolean, string|nil}
 function OPX.PlaceCharacter(player)
 	local data = player.PlayerData
 	local source = data.source
@@ -302,17 +305,13 @@ function OPX.PlaceCharacter(player)
 	if not target then
 		local spawn = Shared.DEFAULT_SPAWN
 		if not spawn.SET then
-			-- allowed on THIS failure: nothing was restored, so wherever they end up is the position
 			allowSampling(player)
 			return false, 'no-default-spawn'
 		end
 		target = { x = spawn.X, y = spawn.Y, z = spawn.Z, heading = spawn.HEADING }
 	end
-	-- never a selection bucket: that one belongs to whoever holds a player id, not to a character
 	local bucket = OPX.Buckets.placementOf(target.bucket)
 
-	-- five looks over a second: the gate has not opened yet, so this poll is the whole of what
-	-- stands between placement and a player mid-transition
 	local life
 	for _ = 1, 5 do
 		life = Open77.players.getLifeState(source)
@@ -323,9 +322,6 @@ function OPX.PlaceCharacter(player)
 		return false, 'life-state-' .. tostring(life and life.phase or 'unknown')
 	end
 
-	-- out of the selection bucket before the kill, as the platform's own gamemodes move a player
-	-- before placing them: the respawn below names the same bucket, and nothing replicated from
-	-- the selection bucket is left for it to carry over
 	OPX.Buckets.move(source, bucket, 'placement')
 
 	local killed, killError = Open77.players.kill(source, {
@@ -344,8 +340,6 @@ function OPX.PlaceCharacter(player)
 		graceMs = 5000,
 	})
 	if not respawned then
-		-- a revive leaves the body where it fell rather than where the row says, so MaySample
-		-- stays false and the stored position survives for the next attempt
 		local revived, reviveError = Open77.players.revive(source, {
 			health = OPX.Math.clamp(health / 100, 0.15, 1.0),
 			graceMs = 5000,
@@ -358,7 +352,6 @@ function OPX.PlaceCharacter(player)
 		return false, tostring(respawnError)
 	end
 
-	-- after the transaction: armour is no respawn option, and the body is about to be replaced
 	local armor = tonumber(data.metadata.armor)
 	if OPX.Math.isFinite(armor) and armor > 0 then Open77.players.setArmor(source, armor) end
 
@@ -366,13 +359,13 @@ function OPX.PlaceCharacter(player)
 	return true
 end
 
---- The whole "I choose this one" sequence. The order is the contract: log in, place, then
---- release the gate.
----@param source Source
----@param citizenId CitizenId
----@return Result  ok value is the Player
+--- @author DemiAutomatic
+--- @method OPX.SelectCharacter
+--- @description Logs in, places, then releases the gate for a chosen character.
+--- @param source {Source}
+--- @param citizenId {CitizenId}
+--- @returns {Result}
 function OPX.SelectCharacter(source, citizenId)
-	-- cooled here, not at a doorway: also reachable from the unrestricted `/opx77.select`
 	if OPX.Cooling(source, 'select', 1000) then
 		return Result.err('error.tooFast', tostring(source))
 	end
@@ -381,13 +374,10 @@ function OPX.SelectCharacter(source, citizenId)
 
 	local current = OPX.GetPlayer(source)
 
-	-- early: on the SAME row the read below beats the write and hands back pre-save values
 	if current ~= nil and current.PlayerData.citizenId == parsed.value then
 		return Result.ok(current)
 	end
 
-	-- the target is checked BEFORE the teardown below, or a refused switch leaves the player in
-	-- the world with nothing loaded and nothing saving them
 	if current then
 		local wanted = OPX.Storage.Players.fetchOne(parsed.value)
 		if not wanted.ok then return wanted end
@@ -404,13 +394,11 @@ function OPX.SelectCharacter(source, citizenId)
 		end
 	end
 
-	-- AWAITED, not dispatched: the fetch below would beat a dispatched save to the database
 	if current then
 		local saved = OPX.LogoutAndWait(source)
 		if saved and saved.ok == false then
 			Open77.log.error(('[character] refusing the switch: %s could not be saved (%s)')
 				:format(current.PlayerData.citizenId, tostring(saved.error)))
-			-- the character is already unloaded, so the player is choosing again
 			OPX.Buckets.isolate(source, 'switch-refused')
 			return Result.err('error.unavailable', tostring(saved.error))
 		end
@@ -418,8 +406,6 @@ function OPX.SelectCharacter(source, citizenId)
 
 	local login = OPX.Login(source, parsed.value)
 	if not login.ok then
-		-- NOT released here: that puts the player in the world with no character loaded. A switch
-		-- that tore the last character down leaves them choosing, so out of the world as well
 		if current then OPX.Buckets.isolate(source, 'switch-refused') end
 		return login
 	end
@@ -429,8 +415,6 @@ function OPX.SelectCharacter(source, citizenId)
 		Open77.log.warn(('[character] %s logged in but was not placed: %s')
 			:format(parsed.value, tostring(reason)))
 	end
-	-- a character is loaded either way: one that could not be placed plays where it stands, in
-	-- the world and not alone in a selection bucket
 	OPX.Buckets.release(source, placed and 'character-placed' or 'character-loaded')
 
 	OPX.Lifecycle.release(source, placed and 'character-placed' or 'character-loaded')

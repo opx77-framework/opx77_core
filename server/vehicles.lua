@@ -1,54 +1,71 @@
---- Vehicles a character owns. The plate is the identity, not the runtime id, and ownership is
---- proved against the character the connection has loaded rather than any client claim.
+--- @author DemiAutomatic
+--- @file server/vehicles.lua
+--- @description Owned vehicles: giving, spawning, storing and keeping their condition.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The server-only vehicle configuration.
 local Config = OPX.Config.VEHICLES
+
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The statements for the vehicles table.
 local Store = OPX.Storage.Vehicles
+
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The success and failure constructors.
 local Result = OPX.Result
 
 OPX.Vehicles = {}
 local Vehicles = OPX.Vehicles
 
---- plate -> { id, citizenId }. What is spawned right now, rebuilt from nothing on a reload.
+--- @author DemiAutomatic
+--- @type {table<string, table>}
+--- @description Spawned vehicles by plate, with runtime id and owner.
 local live = {}
 
---- The number `value` is, or nil when it is not a real finite one.
----@param value any
----@return number|nil
+--- @author DemiAutomatic
+--- @method finiteNumber
+--- @description Answers a value as a finite number, or nil.
+--- @param value {any}
+--- @returns {number|nil}
 local function finiteNumber(value)
 	value = tonumber(value)
 	if not OPX.Math.isFinite(value) then return nil end
 	return value
 end
 
---- A plate in the configured shape. Uppercase ASCII only: the column is `ascii_bin`.
----@return string
+--- @author DemiAutomatic
+--- @method plate
+--- @description Draws a plate in the configured PLATE_FORMAT shape.
+--- @returns {string}
 local function plate()
 	return OPX.String.random(Config.PLATE_FORMAT)
 end
 
---- The character this connection has loaded, or nil.
----@param source Source
----@return table|nil
+--- @author DemiAutomatic
+--- @method character
+--- @description Answers the PlayerData this connection has loaded, or nil.
+--- @param source {Source}
+--- @returns {table|nil}
 local function character(source)
 	local player = OPX.GetPlayer(source)
 	return player and player.PlayerData or nil
 end
 
--- ---------------------------------------------------------------------------
--- Owning
--- ---------------------------------------------------------------------------
-
---- Give a character a vehicle. Coroutine only: it writes.
----@param citizenId string
----@param record string  a TweakDB record, e.g. "Vehicle.v_standard2_archer_hella_player"
----@param options? { garage?: string, appearance?: string, paint?: table, metadata?: table }
----@return table result  Result of the stored vehicle
+--- @author DemiAutomatic
+--- @method OPX.Vehicles.Give
+--- @description Stores a new vehicle for a character under a fresh plate.
+--- @param citizenId {string}
+--- @param record {string} A TweakDB vehicle record.
+--- @param options {table|nil}
+--- @returns {Result}
 function OPX.Vehicles.Give(citizenId, record, options)
 	options = options or {}
 	if type(citizenId) ~= 'string' or type(record) ~= 'string' or record == '' then
 		return Result.err('error.badRequest', 'citizenId and record are required')
 	end
-	-- the host caps the record at 256; refusing here keeps the reason readable
 	if #record > 256 then return Result.err('vehicle.badRecord', 'record is too long') end
 
 	if Config.PER_CHARACTER > 0 then
@@ -78,23 +95,25 @@ function OPX.Vehicles.Give(citizenId, record, options)
 				:format(citizenId, entity.plate, record))
 			return Result.ok(entity)
 		end
-		-- a duplicate plate is the only failure worth retrying; anything else is the database
 		if not tostring(inserted.detail or ''):find('Duplicate', 1, true) then return inserted end
 	end
 	return Result.err('vehicle.plateExhausted', entity and entity.plate or '?')
 end
 
---- Every vehicle a character owns.
----@param citizenId string
----@return table result
+--- @author DemiAutomatic
+--- @method OPX.Vehicles.List
+--- @description Answers every vehicle a character owns.
+--- @param citizenId {string}
+--- @returns {Result}
 function OPX.Vehicles.List(citizenId)
 	return Store.fetchByOwner(citizenId)
 end
 
---- Which owned vehicle a runtime id is, when the core spawned it. A vehicle another resource
---- created answers nil: it has no row, so nothing durable may be keyed on it.
----@param vehicleId integer
----@return string|nil plate, string|nil citizenId
+--- @author DemiAutomatic
+--- @method OPX.Vehicles.PlateOf
+--- @description Answers the plate and owner of a vehicle the core spawned.
+--- @param vehicleId {integer}
+--- @returns {string|nil, string|nil}
 function OPX.Vehicles.PlateOf(vehicleId)
 	for plateId, record in pairs(live) do
 		if record.id == vehicleId then return plateId, record.citizenId end
@@ -102,9 +121,11 @@ function OPX.Vehicles.PlateOf(vehicleId)
 	return nil, nil
 end
 
---- The stored row, plus whether it is spawned right now.
----@param plateId string
----@return table result
+--- @author DemiAutomatic
+--- @method OPX.Vehicles.Get
+--- @description Answers the stored row and whether it is spawned now.
+--- @param plateId {string}
+--- @returns {Result}
 function OPX.Vehicles.Get(plateId)
 	local fetched = Store.fetchOne(plateId)
 	if not fetched.ok then return fetched end
@@ -114,15 +135,12 @@ function OPX.Vehicles.Get(plateId)
 	return fetched
 end
 
--- ---------------------------------------------------------------------------
--- Spawning
--- ---------------------------------------------------------------------------
-
---- Puts a character's vehicle in the world beside them. Ownership is checked against the
---- loaded character, never against anything the caller sent. Coroutine only.
----@param source Source
----@param plateId string
----@return table result  Result of { plate, id }
+--- @author DemiAutomatic
+--- @method OPX.Vehicles.Spawn
+--- @description Spawns a loaded character's own vehicle beside them.
+--- @param source {Source}
+--- @param plateId {string}
+--- @returns {Result}
 function OPX.Vehicles.Spawn(source, plateId)
 	local data = character(source)
 	if not data then return Result.err('error.notLoggedIn', tostring(source)) end
@@ -135,7 +153,6 @@ function OPX.Vehicles.Spawn(source, plateId)
 		OPX.Logger.security('vehicle.notYours',
 			('%s asked for %s'):format(data.citizenId, plateId),
 			{ owner = vehicle.citizenId }, source)
-		-- the same code a missing plate gets: "somebody else's" is an existence oracle
 		return Result.err('vehicle.notFound', plateId)
 	end
 	if live[plateId] then return Result.ok({ plate = plateId, id = live[plateId].id }) end
@@ -154,16 +171,12 @@ function OPX.Vehicles.Spawn(source, plateId)
 	})
 	if id == nil then return Result.err('vehicle.spawnRefused', tostring(reason)) end
 
-	-- given back, or a store-then-spawn cycle is a free repair of glass, lights, tyres, dents
-	-- and the destroyed flag
 	if type(vehicle.damage) == 'table' then
 		Open77.vehicles.setDamage(id, vehicle.damage)
 	end
 	local flags = finiteNumber(vehicle.metadata and vehicle.metadata.flags)
 	if flags ~= nil then Open77.vehicles.update(id, { flags = flags }) end
 
-	-- re-read the connection: the fetch above yielded, and writing `live` for a character who
-	-- has since left strands a vehicle nothing will ever store
 	local still = character(source)
 	if not still or still.citizenId ~= data.citizenId then
 		Open77.vehicles.remove(id)
@@ -176,20 +189,20 @@ function OPX.Vehicles.Spawn(source, plateId)
 	return Result.ok({ plate = plateId, id = id })
 end
 
---- Takes it back off the world and writes what happened to it. Coroutine only.
----@param plateId string
----@param garage? string  where it belongs now; omitted keeps the one it had
----@return table result
+--- @author DemiAutomatic
+--- @method OPX.Vehicles.Store
+--- @description Removes a spawned vehicle and writes its condition back.
+--- @param plateId {string}
+--- @param garage {string|nil} Omitted keeps the current garage.
+--- @returns {Result}
 function OPX.Vehicles.Store(plateId, garage)
 	local record = live[plateId]
 	if record == nil then return Result.err('vehicle.notSpawned', tostring(plateId)) end
 
-	-- read before the remove: the snapshot is gone the moment the vehicle is
 	local snapshot = Open77.vehicles.get(record.id)
 	if snapshot ~= nil then
 		local fetched = Store.fetchOne(plateId)
 		if not fetched.ok then
-			-- the removal below still happens, so say so: the condition is lost, not deferred
 			Open77.log.error(('[vehicles] %s is being removed but its row could not be read (%s); ' ..
 				'its condition is not written'):format(plateId, tostring(fetched.detail)))
 		else
@@ -211,12 +224,12 @@ function OPX.Vehicles.Store(plateId, garage)
 	return Result.ok({ plate = plateId })
 end
 
---- Everything this character has out, stored. Called on logout and on a resource stop.
----@param citizenId string|nil nil stores every live vehicle
----@return integer stored
+--- @author DemiAutomatic
+--- @method OPX.Vehicles.StoreAll
+--- @description Stores every spawned vehicle of one character, or of everyone.
+--- @param citizenId {string|nil}
+--- @returns {integer}
 function OPX.Vehicles.StoreAll(citizenId)
-	-- plates collected BEFORE anything yields: a spawn landing mid-walk inserts a key into the
-	-- table being iterated, which is Lua's undefined case for `next`
 	local plates = {}
 	for plateId, record in pairs(live) do
 		if citizenId == nil or record.citizenId == citizenId then plates[#plates + 1] = plateId end
@@ -225,18 +238,16 @@ function OPX.Vehicles.StoreAll(citizenId)
 	local stored = 0
 	for index = 1, #plates do
 		local plateId = plates[index]
-		-- re-read: it may have been stored or removed while we were awaiting an earlier one
 		if live[plateId] ~= nil and Vehicles.Store(plateId).ok then stored = stored + 1 end
 	end
 	return stored
 end
 
--- ---------------------------------------------------------------------------
--- Keeping the world and the rows in step
--- ---------------------------------------------------------------------------
-
---- A character leaving takes its cars with it, so their condition is written rather than
---- lost to the host's next reload.
+--- @author DemiAutomatic
+--- @event opx77:player:unloaded
+--- @description Stores the vehicles a departing character left out.
+--- @param _ {Source}
+--- @param playerData {PlayerData}
 AddEventHandler(OPX.Events.Internal.PLAYER_UNLOADED, function(_, playerData)
 	if type(playerData) ~= 'table' then return end
 	local stored = Vehicles.StoreAll(playerData.citizenId)
@@ -246,7 +257,11 @@ AddEventHandler(OPX.Events.Internal.PLAYER_UNLOADED, function(_, playerData)
 	end
 end)
 
---- The host removed one: it was destroyed, or another resource took it.
+--- @author DemiAutomatic
+--- @event onVehicleRemoved
+--- @description Forgets a spawned vehicle the host removed and marks it stored.
+--- @param id {integer|string}
+--- @param reason {string}
 AddEventHandler('onVehicleRemoved', function(id, reason)
 	id = tonumber(id)
 	for plateId, record in pairs(live) do
@@ -259,13 +274,9 @@ AddEventHandler('onVehicleRemoved', function(id, reason)
 	end
 end)
 
---- Condition, written while the vehicle is still out. This loop is the guarantee that damage
---- is kept, not the stop handler below.
 CreateThread(function()
 	while true do
 		Wait(Config.SAVE_SECONDS * 1000)
-		-- keys snapshotted and each save wrapped: one raise would end condition persistence for
-		-- the whole process, silently
 		local plates = {}
 		for plateId in pairs(live) do plates[#plates + 1] = plateId end
 
@@ -292,8 +303,10 @@ CreateThread(function()
 	end
 end)
 
---- A resource stop removes every vehicle it owns, so the rows are written first. Not
---- dispatched to a thread: a stop does not resume one.
+--- @author DemiAutomatic
+--- @event onResourceStop
+--- @description Stores every spawned vehicle before the core stops.
+--- @param name {string}
 AddEventHandler('onResourceStop', function(name)
 	if name ~= GetCurrentResourceName() then return end
 	local stored = Vehicles.StoreAll(nil)
@@ -302,12 +315,10 @@ AddEventHandler('onResourceStop', function(name)
 	end
 end)
 
--- ---------------------------------------------------------------------------
--- Client to server
--- ---------------------------------------------------------------------------
-
---- A player asking for one of their own cars. Everything is re-derived: the character from
---- the connection, the ownership from the row.
+--- @author DemiAutomatic
+--- @event opx77:server:spawnVehicle
+--- @description Spawns one of the connection's own vehicles by plate.
+--- @param payload {any}
 RegisterNetEvent(OPX.Events.Server.SPAWN_VEHICLE, function(payload)
 	local src = tonumber(source)
 	if not src then return end
@@ -331,6 +342,10 @@ RegisterNetEvent(OPX.Events.Server.SPAWN_VEHICLE, function(payload)
 	end)
 end)
 
+--- @author DemiAutomatic
+--- @event opx77:server:storeVehicle
+--- @description Stores one of the connection's own spawned vehicles by plate.
+--- @param payload {any}
 RegisterNetEvent(OPX.Events.Server.STORE_VEHICLE, function(payload)
 	local src = tonumber(source)
 	if not src then return end
@@ -344,8 +359,6 @@ RegisterNetEvent(OPX.Events.Server.STORE_VEHICLE, function(payload)
 	end
 
 	CreateThread(function()
-		-- ownership before anything is taken off the world: `live` is keyed by plate, so a
-		-- player could otherwise store somebody else's car by naming it
 		local data = character(src)
 		local record = live[plateId]
 		if not data or record == nil or record.citizenId ~= data.citizenId then

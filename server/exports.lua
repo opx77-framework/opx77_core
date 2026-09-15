@@ -1,25 +1,36 @@
---- The core's server exports: what another server resource may ask of it, and who may ask.
---- Every export answers `{ ok = true, ... }` or `{ ok = false, error = <locale key> }` and never
---- raises; a raise is logged and answered `error.unavailable`. See README, "Server exports".
----
---- Loaded last: publishing the surface claims everything it reads exists.
+--- @author DemiAutomatic
+--- @file server/exports.lua
+--- @description The server exports other server resources call, and their gates.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description Who may call the server exports, and the answer size bound.
 local Config = OPX.Config.SERVER.EXPORTS
+
+--- @author DemiAutomatic
+--- @type {table}
+--- @description Bounds on what the inventory storage exports accept.
 local Limits = OPX.Config.SERVER.INVENTORY
+
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The inventory storage statements.
 local Store = OPX.Storage.Inventories
 
---- Bumped on any breaking change to an export's arguments or answer. A name is never reused.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Contract number, bumped on any breaking export change.
 local CONTRACT = 1
 
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Largest encoded answer an export may return, in bytes.
 local MAX_RESULT_BYTES = math.floor(tonumber(Config.MAX_RESULT_BYTES) or 32768)
 
--- ---------------------------------------------------------------------------
--- The caller, the gates, the answer
--- ---------------------------------------------------------------------------
-
---- Who is calling, read from the host once, at entry, and handed down: exported coroutines
---- interleave at every yield, so a module-level copy would name whichever call resumed last.
----@return { name: string, generation: integer }|nil
+--- @author DemiAutomatic
+--- @method callerOf
+--- @description Reads the invoking resource and its generation from the host.
+--- @returns {table|nil}
 local function callerOf()
 	local name = GetInvokingResource()
 	local generation = GetInvokingResourceGeneration()
@@ -29,32 +40,42 @@ local function callerOf()
 	return { name = name, generation = tonumber(generation) or 0 }
 end
 
----@param name string
----@return boolean
+--- @author DemiAutomatic
+--- @method mayRead
+--- @description Answers whether EXPORTS.READ lets a resource call the reads.
+--- @param name {string}
+--- @returns {boolean}
 local function mayRead(name)
 	if Config.READ == '*' then return true end
 	return type(Config.READ) == 'table' and Config.READ[name] == true
 end
 
----@param name string
----@param scope string
----@return boolean
+--- @author DemiAutomatic
+--- @method mayWrite
+--- @description Answers whether EXPORTS.CALLERS grants a resource a scope.
+--- @param name {string}
+--- @param scope {string}
+--- @returns {boolean}
 local function mayWrite(name, scope)
 	local entry = type(Config.CALLERS) == 'table' and Config.CALLERS[name] or nil
 	local scopes = type(entry) == 'table' and entry.scopes or nil
 	return type(scopes) == 'table' and scopes[scope] == true
 end
 
----@param code string
----@return table
+--- @author DemiAutomatic
+--- @method refused
+--- @description Builds a refusal answer carrying a locale key code.
+--- @param code {string}
+--- @returns {table}
 local function refused(code)
 	return { ok = false, error = code }
 end
 
---- The answer, unless it would not fit the host's transfer budget. Past that the caller would
---- see an opaque codec refusal instead of a code it can branch on.
----@param value table
----@return table
+--- @author DemiAutomatic
+--- @method sized
+--- @description Answers the value, or export.tooLarge when it would not fit.
+--- @param value {table}
+--- @returns {table}
 local function sized(value)
 	local encoded, text = pcall(json.encode, value)
 	if not encoded or type(text) ~= 'string' then return refused('export.tooLarge') end
@@ -62,11 +83,13 @@ local function sized(value)
 	return value
 end
 
---- Publishes one export behind the caller check, the boot gate and its scope. `scope` nil
---- makes it a read.
----@param name string
----@param scope string|nil
----@param fn fun(caller: table, ...): table
+--- @author DemiAutomatic
+--- @method guard
+--- @description Wraps an export body in the caller, boot and scope checks.
+--- @param name {string}
+--- @param scope {string|nil} Nil makes the export a read.
+--- @param fn {fun(caller: table, ...): table}
+--- @returns {function}
 local function guard(name, scope, fn)
 	return function(...)
 		local caller = callerOf()
@@ -92,35 +115,35 @@ local function guard(name, scope, fn)
 	end
 end
 
--- ---------------------------------------------------------------------------
--- Argument checks. Every argument is checked, a known caller's included.
--- ---------------------------------------------------------------------------
-
---- A whole number inside `[low, high]`, or nil. NaN fails `value == value`.
----@param value any
----@param low number
----@param high number
----@return integer|nil
+--- @author DemiAutomatic
+--- @method integer
+--- @description Answers a whole number inside the bounds, or nil.
+--- @param value {any}
+--- @param low {number}
+--- @param high {number}
+--- @returns {integer|nil}
 local function integer(value, low, high)
 	if type(value) ~= 'number' or value ~= value or value % 1 ~= 0 then return nil end
 	if value < low or value > high then return nil end
 	return math.floor(value)
 end
 
----@param value any
----@param maximum integer
----@param pattern string
----@return string|nil
+--- @author DemiAutomatic
+--- @method token
+--- @description Answers a non-empty bounded string matching a pattern, or nil.
+--- @param value {any}
+--- @param maximum {integer}
+--- @param pattern {string}
+--- @returns {string|nil}
 local function token(value, maximum, pattern)
 	if type(value) ~= 'string' or #value == 0 or #value > maximum then return nil end
 	if not value:match(pattern) then return nil end
 	return value
 end
 
--- ---------------------------------------------------------------------------
--- Reads
--- ---------------------------------------------------------------------------
-
+--- @author DemiAutomatic
+--- @export GetVersion
+--- @description Answers the core version, contract number and the caller's scopes.
 exports('GetVersion', guard('GetVersion', nil, function(caller)
 	local scopes = {}
 	local entry = type(Config.CALLERS) == 'table' and Config.CALLERS[caller.name] or nil
@@ -133,9 +156,11 @@ exports('GetVersion', guard('GetVersion', nil, function(caller)
 	return { ok = true, version = OPX.VERSION, exports = CONTRACT, scopes = scopes }
 end))
 
---- The identity of a connection, from the session the core keeps for it.
----@param source Source
----@return table
+--- @author DemiAutomatic
+--- @method identityOfSource
+--- @description Answers the identity of a connection from its session.
+--- @param source {integer}
+--- @returns {table}
 local function identityOfSource(source)
 	local session = OPX.Sessions[source]
 	local player = OPX.GetPlayer(source)
@@ -154,8 +179,10 @@ local function identityOfSource(source)
 	}
 end
 
---- `target` is a player id, which is online only, or a citizen id, which is also found when
---- the character is offline: then `online` and `loaded` are false and `source` is absent.
+--- @author DemiAutomatic
+--- @export GetIdentity
+--- @description Answers who a player id or citizen id is, online or not.
+--- @param target {integer|string}
 exports('GetIdentity', guard('GetIdentity', nil, function(_, target)
 	if type(target) == 'number' then
 		local source = integer(target, 1, 2147483647)
@@ -184,8 +211,10 @@ exports('GetIdentity', guard('GetIdentity', nil, function(_, target)
 	}
 end))
 
---- Which owned vehicle a runtime vehicle id is. `plate` is absent for a vehicle the core did
---- not spawn, which has no row to key anything durable on.
+--- @author DemiAutomatic
+--- @export GetVehiclePlate
+--- @description Answers the plate and owner of a vehicle the core spawned.
+--- @param vehicleId {integer}
 exports('GetVehiclePlate', guard('GetVehiclePlate', nil, function(_, vehicleId)
 	local id = integer(vehicleId, 1, math.maxinteger)
 	if not id then return refused('export.badArgument') end
@@ -193,21 +222,32 @@ exports('GetVehiclePlate', guard('GetVehiclePlate', nil, function(_, vehicleId)
 	return { ok = true, plate = plate, citizenId = citizenId }
 end))
 
--- ---------------------------------------------------------------------------
--- The change cursor: what happened to characters, for resources whose VM cannot hear
--- `Events.Internal`. A bounded ring, read from a cursor, not a callback bus.
--- ---------------------------------------------------------------------------
-
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Changes the journal ring keeps before dropping the oldest.
 local JOURNAL_SIZE = 512
+
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Most changes one GetChanges answer carries.
 local EVENTS_PER_READ = 16
 
----@type table<integer, table>
+--- @author DemiAutomatic
+--- @type {table<integer, CoreChange>}
+--- @description The change ring, keyed by cursor.
 local journal = {}
+
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description The cursor of the newest recorded change.
 local cursor = 0
 
----@param kind "loaded"|"unloaded"|"deleted"
----@param source Source|nil
----@param citizenId CitizenId|nil
+--- @author DemiAutomatic
+--- @method record
+--- @description Appends one change to the journal ring.
+--- @param kind {string} loaded, unloaded or deleted.
+--- @param source {integer|nil}
+--- @param citizenId {string|nil}
 local function record(kind, source, citizenId)
 	cursor = cursor + 1
 	journal[cursor] = {
@@ -220,21 +260,37 @@ local function record(kind, source, citizenId)
 	journal[cursor - JOURNAL_SIZE] = nil
 end
 
+--- @author DemiAutomatic
+--- @event opx77:player:loaded
+--- @description Records a loaded character in the change journal.
+--- @param source {integer}
+--- @param playerData {PlayerData}
 AddEventHandler(OPX.Events.Internal.PLAYER_LOADED, function(source, playerData)
 	record('loaded', source, type(playerData) == 'table' and playerData.citizenId or nil)
 end)
 
+--- @author DemiAutomatic
+--- @event opx77:player:unloaded
+--- @description Records an unloaded character in the change journal.
+--- @param source {integer}
+--- @param playerData {PlayerData}
 AddEventHandler(OPX.Events.Internal.PLAYER_UNLOADED, function(source, playerData)
 	record('unloaded', source, type(playerData) == 'table' and playerData.citizenId or nil)
 end)
 
+--- @author DemiAutomatic
+--- @event opx77:player:characterDeleted
+--- @description Records a deleted character in the change journal.
+--- @param source {integer}
+--- @param citizenId {string}
 AddEventHandler(OPX.Events.Internal.CHARACTER_DELETED, function(source, citizenId)
 	record('deleted', source, citizenId)
 end)
 
---- Events after `since`, oldest first, at most EVENTS_PER_READ of them. `reset` says the
---- caller's cursor is not this journal's: the core reloaded, or the ring moved past it, and
---- the caller must re-read whatever it keeps instead of trusting the events alone.
+--- @author DemiAutomatic
+--- @export GetChanges
+--- @description Answers the character changes recorded after a cursor.
+--- @param since {integer}
 exports('GetChanges', guard('GetChanges', nil, function(_, since)
 	since = integer(since, 0, math.maxinteger)
 	if since == nil then return refused('export.badArgument') end
@@ -262,28 +318,44 @@ exports('GetChanges', guard('GetChanges', nil, function(_, since)
 	}
 end))
 
--- ---------------------------------------------------------------------------
--- Inventory storage, scope `inventory`. The core stores what it is handed; what may go in a
--- container is opx77_inventory's to decide.
--- ---------------------------------------------------------------------------
-
+--- @author DemiAutomatic
+--- @type {string}
+--- @description Pattern a container kind must match.
 local KIND = '^[a-z][a-z0-9_]*$'
+--- @author DemiAutomatic
+--- @type {string}
+--- @description Pattern a container owner must match.
 local OWNER = '^[%w_%-%.:]+$'
+--- @author DemiAutomatic
+--- @type {string}
+--- @description Pattern an item name must match.
 local ITEM = '^[%w_%-%.]+$'
+--- @author DemiAutomatic
+--- @type {string}
+--- @description Pattern a staged save token must match.
 local TOKEN = '^[%w_%-]+$'
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Largest count one stack may carry.
 local MAX_COUNT = 2147483647
 
---- The size of a container as the caller asks for it at creation.
----@param options any
----@return integer|nil slots, integer|nil maxWeight
+--- @author DemiAutomatic
+--- @method sizeOf
+--- @description Reads a container's requested slots and weight from the options.
+--- @param options {any}
+--- @returns {integer|nil, integer|nil}
 local function sizeOf(options)
 	if type(options) ~= 'table' then return nil, nil end
 	return integer(options.slots, 1, Limits.MAX_SLOTS),
 		integer(options.maxWeight, 0, Limits.MAX_WEIGHT)
 end
 
---- Finds or creates a container. The size is used only when it is created; an existing one
---- answers the size it was created with.
+--- @author DemiAutomatic
+--- @export InventoryEnsure
+--- @description Finds or creates a container, checking a linked owner exists.
+--- @param kind {string}
+--- @param owner {string}
+--- @param options {table}
 exports('InventoryEnsure', guard('InventoryEnsure', 'inventory', function(_, kind, owner, options)
 	kind = token(kind, 32, KIND)
 	owner = token(owner, 64, OWNER)
@@ -328,8 +400,11 @@ exports('InventoryEnsure', guard('InventoryEnsure', 'inventory', function(_, kin
 	}
 end))
 
---- One page of a container's stacks after slot `after`, trimmed to what fits an answer.
---- `nextAfter` is present while there may be more: pass it back as `after`.
+--- @author DemiAutomatic
+--- @export InventoryRead
+--- @description Answers one page of a container's stacks after a slot.
+--- @param id {integer}
+--- @param after {integer|nil}
 exports('InventoryRead', guard('InventoryRead', 'inventory', function(_, id, after)
 	id = integer(id, 1, 4294967295)
 	after = after == nil and 0 or integer(after, 0, 65535)
@@ -353,7 +428,6 @@ exports('InventoryRead', guard('InventoryRead', 'inventory', function(_, id, aft
 		return refused('error.unavailable')
 	end
 
-	-- trimmed a row at a time against half the budget: the rest is headroom for node overhead
 	local budget, used = MAX_RESULT_BYTES // 2, 0
 	local list = rows.value
 	for i = 1, #list do
@@ -370,14 +444,29 @@ exports('InventoryRead', guard('InventoryRead', 'inventory', function(_, id, aft
 	return answer
 end))
 
---- caller name -> token -> { atMs, containers = { [id] = rows }, order = { id, ... } }. A save
---- is staged across calls, because one argument carries at most 48 KiB, and committed as one
---- transaction.
+--- @author DemiAutomatic
+--- @type {table<string, table<string, table>>}
+--- @description Staged saves, keyed by caller name then token.
 local staged = {}
+
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Milliseconds an uncommitted token is kept.
 local STAGE_TTL_MS = 30000
+
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Most open tokens one caller may hold.
 local TOKENS_PER_CALLER = 8
+
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Most containers one token may stage.
 local CONTAINERS_PER_TOKEN = 64
 
+--- @author DemiAutomatic
+--- @method sweepStaged
+--- @description Forgets staged saves nobody committed in time.
 local function sweepStaged()
 	local now = OPX.Now()
 	for name, tokens in pairs(staged) do
@@ -388,9 +477,11 @@ local function sweepStaged()
 	end
 end
 
---- One stack off the wire, checked, or nil.
----@param row any
----@return table|nil
+--- @author DemiAutomatic
+--- @method stackOf
+--- @description Answers one checked stack from the wire, or nil.
+--- @param row {any}
+--- @returns {InventoryStack|nil}
 local function stackOf(row)
 	if type(row) ~= 'table' then return nil end
 	local slot = integer(row.slot, 1, Limits.MAX_SLOTS)
@@ -407,8 +498,12 @@ local function stackOf(row)
 	return { slot = slot, name = name, count = count, metadata = metadata }
 end
 
---- Appends stacks to a container's staged save. The first stage of a container under a token
---- empties it, so a container staged with no rows is saved empty.
+--- @author DemiAutomatic
+--- @export InventoryStage
+--- @description Appends stacks to a container's save staged under a token.
+--- @param key {string}
+--- @param id {integer}
+--- @param rows {InventoryStack[]}
 exports('InventoryStage', guard('InventoryStage', 'inventory', function(caller, key, id, rows)
 	key = token(key, 32, TOKEN)
 	id = integer(id, 1, 4294967295)
@@ -455,8 +550,10 @@ exports('InventoryStage', guard('InventoryStage', 'inventory', function(caller, 
 	return { ok = true, staged = #list }
 end))
 
---- Writes everything staged under a token as one transaction, then forgets the token. A
---- failed commit writes nothing; the caller stages again and retries.
+--- @author DemiAutomatic
+--- @export InventoryCommit
+--- @description Writes everything staged under a token as one transaction.
+--- @param key {string}
 exports('InventoryCommit', guard('InventoryCommit', 'inventory', function(caller, key)
 	key = token(key, 32, TOKEN)
 	if not key then return refused('export.badArgument') end
@@ -480,6 +577,12 @@ exports('InventoryCommit', guard('InventoryCommit', 'inventory', function(caller
 	return { ok = true, saved = #containers }
 end))
 
+--- @author DemiAutomatic
+--- @export InventoryResize
+--- @description Changes a container's slot count and weight limit.
+--- @param id {integer}
+--- @param slots {integer}
+--- @param maxWeight {integer}
 exports('InventoryResize', guard('InventoryResize', 'inventory', function(_, id, slots, maxWeight)
 	id = integer(id, 1, 4294967295)
 	slots = integer(slots, 1, Limits.MAX_SLOTS)
@@ -490,6 +593,10 @@ exports('InventoryResize', guard('InventoryResize', 'inventory', function(_, id,
 	return { ok = true }
 end))
 
+--- @author DemiAutomatic
+--- @export InventoryDelete
+--- @description Deletes a container, its stacks going by cascade.
+--- @param id {integer}
 exports('InventoryDelete', guard('InventoryDelete', 'inventory', function(_, id)
 	id = integer(id, 1, 4294967295)
 	if not id then return refused('export.badArgument') end
@@ -498,7 +605,11 @@ exports('InventoryDelete', guard('InventoryDelete', 'inventory', function(_, id)
 	return { ok = true }
 end))
 
---- Which containers hold an item, the largest stacks first, at most 50.
+--- @author DemiAutomatic
+--- @export InventoryHolders
+--- @description Answers which containers hold an item, largest stacks first.
+--- @param name {string}
+--- @param limit {integer|nil}
 exports('InventoryHolders', guard('InventoryHolders', 'inventory', function(_, name, limit)
 	name = token(name, 48, ITEM)
 	limit = limit == nil and 20 or integer(limit, 1, 50)

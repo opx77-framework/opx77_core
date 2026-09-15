@@ -1,10 +1,11 @@
--- Jobs. Definitions, not settings: the key is stored on the character row, so add freely and
--- rename never. Grades are keyed from 0 and must be contiguous.
+--- @author DemiAutomatic
+--- @file data/jobs.lua
+--- @description Job definitions, keyed by the durable name stored on characters.
 
 OPX.Jobs = {
 	unemployed = {
 		label = 'Unemployed',
-		defaultDuty = true, -- nothing to clock into, so its tiny paycheck needs no shift
+		defaultDuty = true,
 		offDutyPay = true,
 		grades = {
 			[0] = { name = 'Freelancer', payment = 25 },

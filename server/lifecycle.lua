@@ -1,18 +1,27 @@
---- The join-time readiness gate: nothing may teleport, spawn, kill or respawn a player until
---- it opens. See README, "The entry gate", for what `GATE_MS` actually bounds.
+--- @author DemiAutomatic
+--- @file server/lifecycle.lua
+--- @description The join-time readiness gate: participation, hold, release, selection watch.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The server-only configuration the gate reads.
 local Config = OPX.Config.SERVER
 
 OPX.Lifecycle = {}
 local Lifecycle = OPX.Lifecycle
 
+--- @author DemiAutomatic
+--- @type {boolean}
+--- @description Whether this host installs the readiness gate API.
 local HAS_GATE = type(Open77.ready) == 'table'
 	and type(Open77.ready.participate) == 'function'
 	and type(Open77.ready.hold) == 'function'
 	and type(Open77.ready.release) == 'function'
 	and type(Open77.ready.status) == 'function'
 
---- Declared once, at load, so every later connection arrives with a hold in our name.
+--- @author DemiAutomatic
+--- @method OPX.Lifecycle.participate
+--- @description Declares the core's participation in the gate, once at load.
 function OPX.Lifecycle.participate()
 	if not HAS_GATE then
 		Open77.log.warn('[lifecycle] this server has no Open77.ready gate: characters still ' ..
@@ -26,8 +35,6 @@ function OPX.Lifecycle.participate()
 	Open77.log.info(('[lifecycle] declaring a %d ms liveness interval on the readiness gate')
 		:format(Config.ENTRY.GATE_MS))
 
-	-- every joiner also arrives held by `__platform`, which clears only on a client emitting
-	-- `open77:session:gameplayReady`
 	local function running(name)
 		local state = GetResourceState(name)
 		return state == 'running' or state == 'starting'
@@ -38,10 +45,11 @@ function OPX.Lifecycle.participate()
 	end
 end
 
---- Takes the hold for one player and remembers the session number, which is what keeps a
---- release honest: releasing by a recycled id alone could clear somebody else's hold.
----@param source Source
----@param reason? string
+--- @author DemiAutomatic
+--- @method OPX.Lifecycle.hold
+--- @description Takes the gate hold for one player and records its session.
+--- @param source {Source}
+--- @param reason {string|nil}
 function OPX.Lifecycle.hold(source, reason)
 	if not HAS_GATE then return end
 	local session = OPX.Sessions[source]
@@ -54,18 +62,17 @@ function OPX.Lifecycle.hold(source, reason)
 	end
 end
 
---- Releases it. Idempotent, and safe for a player who never had one. The note reaches every
---- running resource as the `detail` of `onPlayerReady`.
----@param source Source
----@param note? string
+--- @author DemiAutomatic
+--- @method OPX.Lifecycle.release
+--- @description Releases a player's gate hold, idempotently, with a note.
+--- @param source {Source}
+--- @param note {string|nil}
 function OPX.Lifecycle.release(source, note)
 	if not HAS_GATE then return end
 	local session = OPX.Sessions[source]
 
 	local gateSession = session and session.gateSession
 	if gateSession == nil then
-		-- asked rather than skipped: a hold nobody releases is not on a clock, so it stalls that
-		-- player for as long as this resource keeps answering
 		local status = Open77.ready.status(source)
 		gateSession = status and status.session or nil
 	end
@@ -79,19 +86,21 @@ function OPX.Lifecycle.release(source, note)
 	Open77.log.debug(('[lifecycle] gate released for %d (%s)'):format(source, note or 'done'))
 end
 
---- Whether the gate has opened for this player this session. A server with no gate reads as
---- open, and so does an id the host raises on.
----@param source Source
----@return boolean
+--- @author DemiAutomatic
+--- @method OPX.Lifecycle.isReady
+--- @description Answers whether the gate has opened for this player.
+--- @param source {Source}
+--- @returns {boolean}
 function OPX.Lifecycle.isReady(source)
 	if not HAS_GATE or type(Open77.ready.isReady) ~= 'function' then return true end
 	local read, open = pcall(Open77.ready.isReady, source)
 	return not read or open == true
 end
 
---- Everything the core does for a player who has just connected. On its own thread because it
---- reads the database, and every failure path releases the gate rather than leaving them held.
----@param source Source
+--- @author DemiAutomatic
+--- @method OPX.Lifecycle.beginEntry
+--- @description Holds, isolates and sends the roster to a connecting player.
+--- @param source {Source}
 function OPX.Lifecycle.beginEntry(source)
 	local session = OPX.EnsureSession(source)
 	if not session then
@@ -102,9 +111,6 @@ function OPX.Lifecycle.beginEntry(source)
 
 	Lifecycle.hold(source, 'opx77_character_selection')
 
-	-- under the closed gate on purpose: a bucket move writes no transform and no life state, and
-	-- taken now nobody else is ever replicated to the world this player is about to load. A
-	-- refusal this early is taken again at the client's READY
 	OPX.Buckets.isolate(source, 'joined')
 
 	CreateThread(function()
@@ -120,9 +126,10 @@ function OPX.Lifecycle.beginEntry(source)
 	end)
 end
 
---- Gives up on a player who never chooses. One thread per joining player against a 1 024
---- budget, so it exits the moment the gate is released or the slot changes hands.
----@param source Source
+--- @author DemiAutomatic
+--- @method OPX.Lifecycle.watch
+--- @description Releases the gate for a player who never chooses a character.
+--- @param source {Source}
 function OPX.Lifecycle.watch(source)
 	local session = OPX.Sessions[source]
 	if not session then return end
@@ -137,7 +144,6 @@ function OPX.Lifecycle.watch(source)
 			if not live or live.userId ~= userId or live.released then return end
 			if live.citizenId then return end
 
-			-- pcall: a raise here would leave this player holding the gate for the session
 			local ok, timedOut = pcall(function()
 				if OPX.Now() < deadline then return false end
 				Open77.log.warn(('[lifecycle] %d spent too long choosing a character; releasing the ' ..

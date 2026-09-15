@@ -1,54 +1,77 @@
---- What a character wears: validation, the write, and the answer. `opx77_appearance` reads the
---- puppet's equipment and wardrobe and sends them here; nothing else may write them.
----
---- One record per character in `opx77_character_clothing`, carried in `PlayerData.clothing`:
---- the record, `false` when none is stored, or nil when the core cannot say -- the table is
---- missing, or the read failed -- which the client reads as "dress nothing, save nothing". The
---- record has the platform's own shape, the one its presentation service stores: nine slots,
---- seven outfits overriding the seven visible ones, and the active outfit.
+--- @author DemiAutomatic
+--- @file server/clothing.lua
+--- @description What a character wears: validation, the stored write and the answer.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The success and failure constructors.
 local Result = OPX.Result
 
 OPX.Clothing = {}
 local Clothing = OPX.Clothing
 
---- The schema version written into every stored record.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description The schema version written into every stored record.
 Clothing.VERSION = 1
 
---- The migration that creates the table. It is optional: see `Clothing.available`.
+--- @author DemiAutomatic
+--- @type {string}
+--- @description The optional migration that creates the clothing table.
 Clothing.MIGRATION = '0007_character_clothing'
 
---- The nine equipment slots, as the platform names them. Underwear is worn, never overridden.
+--- @author DemiAutomatic
+--- @type {string[]}
+--- @description The nine equipment slots, as the platform names them.
 local SLOTS = { 'Head', 'Face', 'InnerChest', 'OuterChest', 'Legs', 'Feet', 'Outfit',
 	'UnderwearTop', 'UnderwearBottom' }
+
+--- @author DemiAutomatic
+--- @type {table<string, boolean>}
+--- @description The nine equipment slots as a set.
 local IS_SLOT = {}
 for index = 1, #SLOTS do IS_SLOT[SLOTS[index]] = true end
+
+--- @author DemiAutomatic
+--- @type {table<string, boolean>}
+--- @description The seven visible slots an outfit may override.
 local IS_OUTFIT_SLOT = { Head = true, Face = true, InnerChest = true, OuterChest = true,
 	Legs = true, Feet = true, Outfit = true }
 
---- Outfits are indexed 0 to 6, as `Open77.wardrobe` indexes them.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description How many wardrobe outfits exist, indexed 0 to 6.
 local OUTFITS = 7
 
---- A record name, as `Open77.equipment.info` bounds one.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description The longest record name, as the equipment service bounds one.
 local MAX_RECORD_BYTES = 160
 
---- Nine slots and 49 overrides of 160 bytes stay under 10 KiB encoded; this only catches a
---- shape the checks below have let through by mistake.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description The largest encoded clothing document the core stores.
 local MAX_JSON_BYTES = 16384
 
---- The same cooldown as a face: one save per player per window, on its own key.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Milliseconds between two clothing saves from one player.
 local COOLDOWN_MS = 2000
 
----@param value any
----@return boolean
+--- @author DemiAutomatic
+--- @method isInteger
+--- @description Answers whether a value is a finite whole number.
+--- @param value {any}
+--- @returns {boolean}
 local function isInteger(value)
 	return type(value) == 'number' and OPX.Math.isFinite(value) and value % 1 == 0
 end
 
---- A worn record name, or false for an empty slot; nil for anything else. No catalogue: the
---- server has none, so this is the shape the look distribution accepts too.
----@param value any
----@return string|false|nil
+--- @author DemiAutomatic
+--- @method recordOf
+--- @description Answers a worn record name, false for empty, nil otherwise.
+--- @param value {any}
+--- @returns {string|false|nil}
 local function recordOf(value)
 	if value == false then return false end
 	if type(value) ~= 'string' or #value < 1 or #value > MAX_RECORD_BYTES then return nil end
@@ -56,9 +79,11 @@ local function recordOf(value)
 	return value
 end
 
---- An outfit index from a key that arrived as a number or, after JSON, as a string.
----@param key any
----@return integer|nil
+--- @author DemiAutomatic
+--- @method outfitIndex
+--- @description Reads an outfit index from a number or digit string key.
+--- @param key {any}
+--- @returns {integer|nil}
 local function outfitIndex(key)
 	local number
 	if type(key) == 'number' then
@@ -70,10 +95,11 @@ local function outfitIndex(key)
 	return math.floor(number)
 end
 
---- A record in canonical form -- all nine slots stated, outfit keys "0" to "6", empty outfits
---- dropped -- or nil and the code saying what was wrong with it.
----@param value any
----@return ClothingRecord|nil canonical, string|nil error
+--- @author DemiAutomatic
+--- @method OPX.Clothing.canonical
+--- @description Answers a clothing record in canonical form, or nil and a code.
+--- @param value {any}
+--- @returns {ClothingRecord|nil, string|nil}
 function OPX.Clothing.canonical(value)
 	if type(value) ~= 'table' then return nil, 'invalid_record' end
 	for key in pairs(value) do
@@ -114,7 +140,6 @@ function OPX.Clothing.canonical(value)
 	for key, overrides in pairs(outfits or {}) do
 		count = count + 1
 		local index = outfitIndex(key)
-		-- "0" and 0 are one outfit: two of them is a client that means two different things
 		if count > OUTFITS or index == nil or seen[index] then return nil, 'invalid_outfit' end
 		seen[index] = true
 		if type(overrides) ~= 'table' then return nil, 'invalid_outfit' end
@@ -131,11 +156,12 @@ function OPX.Clothing.canonical(value)
 	return canonical
 end
 
---- Whether two canonical records are the same clothing, for skipping a write that would change
---- nothing.
----@param left ClothingRecord|false|nil
----@param right ClothingRecord|false|nil
----@return boolean
+--- @author DemiAutomatic
+--- @method OPX.Clothing.same
+--- @description Answers whether two canonical records are the same clothing.
+--- @param left {ClothingRecord|false|nil}
+--- @param right {ClothingRecord|false|nil}
+--- @returns {boolean}
 function OPX.Clothing.same(left, right)
 	if type(left) ~= 'table' or type(right) ~= 'table' then return false end
 	for index = 1, #SLOTS do
@@ -155,15 +181,19 @@ function OPX.Clothing.same(left, right)
 	return true
 end
 
---- Whether the table exists as far as this run knows: its migration was not skipped.
----@return boolean
+--- @author DemiAutomatic
+--- @method OPX.Clothing.available
+--- @description Answers whether the clothing migration was not skipped this run.
+--- @returns {boolean}
 function OPX.Clothing.available()
 	return OPX.Storage.skipped[Clothing.MIGRATION] ~= true
 end
 
---- The stored record for a character, validated. Coroutine only.
----@param citizenId CitizenId
----@return Result  ok value is the record, or false when none is stored
+--- @author DemiAutomatic
+--- @method fetch
+--- @description Reads and validates a character's stored clothing record.
+--- @param citizenId {CitizenId}
+--- @returns {Result}
 local function fetch(citizenId)
 	if not Clothing.available() then return Result.err('error.unavailable', 'clothing_table') end
 	local fetched = OPX.Storage.Players.fetchClothing(citizenId)
@@ -174,10 +204,11 @@ local function fetch(citizenId)
 	return Result.ok(canonical)
 end
 
---- What `PlayerData.clothing` starts as at login. Never refuses a login: a failure is nil, which
---- keeps the stored row away from a client that could not be shown it. Coroutine only.
----@param citizenId CitizenId
----@return ClothingRecord|false|nil
+--- @author DemiAutomatic
+--- @method OPX.Clothing.load
+--- @description Answers what PlayerData.clothing starts as at login.
+--- @param citizenId {CitizenId}
+--- @returns {ClothingRecord|false|nil}
 function OPX.Clothing.load(citizenId)
 	local fetched = fetch(citizenId)
 	if fetched.ok then return fetched.value end
@@ -189,11 +220,12 @@ function OPX.Clothing.load(citizenId)
 	return nil
 end
 
---- Validates a record, writes it to `opx77_character_clothing` and puts it on
---- `PlayerData.clothing`. Coroutine only.
----@param identifier Player|Source|CitizenId
----@param clothing any straight off the wire
----@return Result  ok value is the canonical record
+--- @author DemiAutomatic
+--- @method OPX.SaveClothing
+--- @description Validates, stores and publishes what a character wears.
+--- @param identifier {Player|Source|CitizenId}
+--- @param clothing {any}
+--- @returns {Result}
 function OPX.SaveClothing(identifier, clothing)
 	local player = OPX.ResolvePlayer(identifier)
 	if not player then return Result.err('error.notLoggedIn', tostring(identifier)) end
@@ -202,7 +234,6 @@ function OPX.SaveClothing(identifier, clothing)
 	if not canonical then return Result.err('clothing.invalid', reason) end
 
 	local data = player.PlayerData
-	-- nil is a login that could not read the row: a write now would replace what nobody has seen
 	if data.clothing == nil or not Clothing.available() then
 		return Result.err('error.unavailable', 'clothing_unavailable')
 	end
@@ -217,7 +248,6 @@ function OPX.SaveClothing(identifier, clothing)
 	if not written.ok then return written end
 	data.clothing = canonical
 
-	-- the write yielded: a player who switched character meanwhile is not sent this one's
 	if not player.Offline and OPX.Players[data.source] == player then
 		player.Functions.UpdatePlayerData()
 		TriggerClientEvent(OPX.Events.Client.CLOTHING_UPDATE, data.source, canonical)
@@ -228,9 +258,11 @@ function OPX.SaveClothing(identifier, clothing)
 	return Result.ok(canonical)
 end
 
---- The stored clothing for a character, online or not. Coroutine only when offline.
----@param identifier Player|Source|CitizenId
----@return Result  ok value is a record, false for none stored, or nil when it could not be read
+--- @author DemiAutomatic
+--- @method OPX.GetClothing
+--- @description Answers the stored clothing for a character, online or not.
+--- @param identifier {Player|Source|CitizenId}
+--- @returns {Result}
 function OPX.GetClothing(identifier)
 	local player = OPX.ResolvePlayer(identifier)
 	if player then return Result.ok(player.PlayerData.clothing) end
@@ -240,9 +272,10 @@ function OPX.GetClothing(identifier)
 	return fetch(identifier)
 end
 
---- What `opx77_appearance` sends when what the player wears has changed. The row written is the
---- connection's character; the citizen id in the payload only refuses a save that was captured
---- for the character before it.
+--- @author DemiAutomatic
+--- @event opx77:server:saveClothing
+--- @description Stores what the connection's character wears, refusing a stale save.
+--- @param payload {any}
 RegisterNetEvent(OPX.Events.Server.SAVE_CLOTHING, function(payload)
 	local src = tonumber(source)
 	if not src then return end

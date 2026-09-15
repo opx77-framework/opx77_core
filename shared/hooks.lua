@@ -1,18 +1,27 @@
---- Extension points, so a gameplay file added to this resource stays additive. A hook runs
---- inside the operation it guards, so one that yields stalls a money transfer.
+--- @author DemiAutomatic
+--- @file shared/hooks.lua
+--- @description Named extension points a gameplay file can veto through.
 
 OPX.Hooks = {}
 local Hooks = OPX.Hooks
 
----@type table<string, { id: integer, fn: function, priority: number }[]>
+--- @author DemiAutomatic
+--- @type {table<string, table[]>}
+--- @description Registered hooks per name, kept sorted by priority.
 local registry = {}
+
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description The last id handed out by a registration.
 local nextId = 0
 
---- Lower `priority` runs first; equal priorities run in registration (manifest) order.
----@param name string
----@param fn fun(payload: HookPayload): boolean? return false to veto
----@param priority? number
----@return integer id  pass to `remove`
+--- @author DemiAutomatic
+--- @method OPX.Hooks.register
+--- @description Adds a hook, lower priority first, and answers its id.
+--- @param name {string}
+--- @param fn {fun(payload: HookPayload): boolean|nil}
+--- @param priority {number|nil}
+--- @returns {integer}
 function OPX.Hooks.register(name, fn, priority)
 	if type(name) ~= 'string' or type(fn) ~= 'function' then
 		error('OPX.Hooks.register expects (name: string, fn: function)', 2)
@@ -27,7 +36,6 @@ function OPX.Hooks.register(name, fn, priority)
 		registry[name] = list
 	end
 
-	-- sorted on write, not on read: the list is written at load and read every call
 	local at = #list + 1
 	for i = 1, #list do
 		if list[i].priority > entry.priority then
@@ -40,8 +48,11 @@ function OPX.Hooks.register(name, fn, priority)
 	return entry.id
 end
 
----@param id integer
----@return boolean
+--- @author DemiAutomatic
+--- @method OPX.Hooks.remove
+--- @description Removes a hook by the id its registration answered.
+--- @param id {integer}
+--- @returns {boolean}
 function OPX.Hooks.remove(id)
 	for _, list in pairs(registry) do
 		for i = 1, #list do
@@ -54,16 +65,17 @@ function OPX.Hooks.remove(id)
 	return false
 end
 
---- Runs every hook at `name`, stopping at the first veto.
----@param name string
----@param payload HookPayload
----@return boolean allowed  false only when a hook returned an explicit false
+--- @author DemiAutomatic
+--- @method OPX.Hooks.trigger
+--- @description Runs every hook at a name, stopping at the first veto.
+--- @param name {string}
+--- @param payload {HookPayload}
+--- @returns {boolean}
 function OPX.Hooks.trigger(name, payload)
 	local list = registry[name]
 	if not list then return true end
 
 	for i = 1, #list do
-		-- pcall: a hook belongs to somebody else's file, and a broken one is no opinion
 		local ok, verdict = pcall(list[i].fn, payload)
 		if not ok then
 			Open77.log.error(('[hooks] %s (#%d) raised: %s')
@@ -75,9 +87,11 @@ function OPX.Hooks.trigger(name, payload)
 	return true
 end
 
---- Whether anything is listening, for skipping a payload nobody will read.
----@param name string
----@return boolean
+--- @author DemiAutomatic
+--- @method OPX.Hooks.has
+--- @description Whether any hook is registered at a name.
+--- @param name {string}
+--- @returns {boolean}
 function OPX.Hooks.has(name)
 	local list = registry[name]
 	return list ~= nil and #list > 0

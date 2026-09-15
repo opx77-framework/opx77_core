@@ -1,10 +1,15 @@
---- Jobs and gangs, multi-membership, online or offline. Coroutine only: every function here
---- yields when the character is not in the world.
+--- @author DemiAutomatic
+--- @file server/groups.lua
+--- @description Job and gang memberships, for characters online or offline.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The shared Result constructors.
 local Result = OPX.Result
 
---- What an offline group change writes back: one column, never the row. Two statements rather
---- than one with the column name interpolated.
+--- @author DemiAutomatic
+--- @type {table<string, string>}
+--- @description The one-column statement an offline group change writes, per column.
 local SAVE_PRIMARY = {
 	job = [[
 UPDATE opx77_characters
@@ -18,12 +23,13 @@ UPDATE opx77_characters
   ]],
 }
 
---- Runs `apply` against a Player, loading a temporary offline one when the character is not
---- in the world, and re-resolving after every await in case a login lands mid-change.
----@param identifier Player|Source|CitizenId
----@param column "job"|"gang"|nil nil for an operation that only touches opx77_character_groups
----@param apply fun(player: Player, offline: boolean): Result
----@return Result
+--- @author DemiAutomatic
+--- @method withCharacter
+--- @description Runs a change against the live Player or a temporary offline one.
+--- @param identifier {Player|Source|CitizenId}
+--- @param column {string|nil} job or gang; nil touches memberships only.
+--- @param apply {fun(player: Player, offline: boolean): Result}
+--- @returns {Result}
 local function withCharacter(identifier, column, apply)
 	local player = OPX.ResolvePlayer(identifier)
 	if player then return apply(player, false) end
@@ -65,13 +71,14 @@ local function withCharacter(identifier, column, apply)
 	return outcome
 end
 
---- The membership write, shared by jobs and gangs. The row goes first; announcing is the
---- caller's job and no caller may skip it, because that is what reaches the autosave.
----@param player Player
----@param groupType GroupType
----@param name string
----@param grade integer
----@return Result
+--- @author DemiAutomatic
+--- @method joinGroup
+--- @description Writes a membership row, then records it on PlayerData.
+--- @param player {Player}
+--- @param groupType {GroupType}
+--- @param name {string}
+--- @param grade {integer}
+--- @returns {Result}
 local function joinGroup(player, groupType, name, grade)
 	local citizenId = player.PlayerData.citizenId
 	local written = OPX.Storage.Players.upsertGroup(citizenId, groupType, name, grade)
@@ -82,10 +89,13 @@ local function joinGroup(player, groupType, name, grade)
 	return Result.ok(true)
 end
 
----@param player Player
----@param groupType GroupType
----@param name string
----@return Result
+--- @author DemiAutomatic
+--- @method leaveGroup
+--- @description Deletes a membership row, then drops it from PlayerData.
+--- @param player {Player}
+--- @param groupType {GroupType}
+--- @param name {string}
+--- @returns {Result}
 local function leaveGroup(player, groupType, name)
 	local citizenId = player.PlayerData.citizenId
 	local removed = OPX.Storage.Players.removeGroup(citizenId, groupType, name)
@@ -96,12 +106,13 @@ local function leaveGroup(player, groupType, name)
 	return Result.ok(true)
 end
 
---- Makes `name` at `grade` the primary job, joining it if needed. Duty comes from the job's
---- `defaultDuty` rather than being carried over.
----@param identifier Player|Source|CitizenId
----@param name string
----@param grade integer
----@return Result  ok value is the new PlayerJob
+--- @author DemiAutomatic
+--- @method OPX.SetJob
+--- @description Makes a job at a grade the primary one, joining it.
+--- @param identifier {Player|Source|CitizenId}
+--- @param name {string}
+--- @param grade {integer}
+--- @returns {Result}
 function OPX.SetJob(identifier, name, grade)
 	return withCharacter(identifier, 'job', function(player)
 		local resolved = OPX.ResolveJob(name, grade)
@@ -123,11 +134,12 @@ function OPX.SetJob(identifier, name, grade)
 	end)
 end
 
---- Clocks a character in or out of their primary job. Refuses for a job whose `defaultDuty`
---- is true: those have no shift to clock into.
----@param identifier Player|Source|CitizenId
----@param onDuty boolean
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.SetJobDuty
+--- @description Clocks a character in or out of their primary job.
+--- @param identifier {Player|Source|CitizenId}
+--- @param onDuty {boolean}
+--- @returns {Result}
 function OPX.SetJobDuty(identifier, onDuty)
 	return withCharacter(identifier, 'job', function(player)
 		local job = player.PlayerData.job
@@ -149,11 +161,13 @@ function OPX.SetJobDuty(identifier, onDuty)
 	end)
 end
 
---- Adds a membership without changing which job is primary.
----@param identifier Player|Source|CitizenId
----@param name string
----@param grade integer
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.AddPlayerToJob
+--- @description Adds a job membership without changing the primary job.
+--- @param identifier {Player|Source|CitizenId}
+--- @param name {string}
+--- @param grade {integer}
+--- @returns {Result}
 function OPX.AddPlayerToJob(identifier, name, grade)
 	return withCharacter(identifier, nil, function(player)
 		local resolved = OPX.ResolveJob(name, grade)
@@ -165,11 +179,12 @@ function OPX.AddPlayerToJob(identifier, name, grade)
 	end)
 end
 
---- Removes a membership. If it was the primary job the character falls back to the default,
---- or a fired employee keeps drawing the salary.
----@param identifier Player|Source|CitizenId
----@param name string
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.RemovePlayerFromJob
+--- @description Removes a job membership, falling back to the default job.
+--- @param identifier {Player|Source|CitizenId}
+--- @param name {string}
+--- @returns {Result}
 function OPX.RemovePlayerFromJob(identifier, name)
 	return withCharacter(identifier, 'job', function(player)
 		local left = leaveGroup(player, 'job', name)
@@ -189,7 +204,6 @@ function OPX.RemovePlayerFromJob(identifier, name)
 			end
 		end
 
-		-- announced even for a non-primary removal, because leaveGroup changed PlayerData.jobs
 		if not announced then player.Functions.UpdatePlayerData() end
 
 		OPX.Logger.player(player, 'job.removed', name)
@@ -197,11 +211,12 @@ function OPX.RemovePlayerFromJob(identifier, name)
 	end)
 end
 
---- Switches which of a character's existing jobs is primary. Refuses a job they are not a
---- member of rather than joining it.
----@param identifier Player|Source|CitizenId
----@param name string
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.SetPlayerPrimaryJob
+--- @description Makes one of a character's existing jobs the primary one.
+--- @param identifier {Player|Source|CitizenId}
+--- @param name {string}
+--- @returns {Result}
 function OPX.SetPlayerPrimaryJob(identifier, name)
 	return withCharacter(identifier, 'job', function(player)
 		local grade = player.PlayerData.jobs[name]
@@ -210,11 +225,13 @@ function OPX.SetPlayerPrimaryJob(identifier, name)
 	end)
 end
 
---- Makes `name` at `grade` the character's primary gang, joining it if needed.
----@param identifier Player|Source|CitizenId
----@param name string
----@param grade integer
----@return Result  ok value is the new PlayerGang
+--- @author DemiAutomatic
+--- @method OPX.SetGang
+--- @description Makes a gang at a grade the primary one, joining it.
+--- @param identifier {Player|Source|CitizenId}
+--- @param name {string}
+--- @param grade {integer}
+--- @returns {Result}
 function OPX.SetGang(identifier, name, grade)
 	return withCharacter(identifier, 'gang', function(player)
 		local resolved = OPX.ResolveGang(name, grade)
@@ -236,11 +253,13 @@ function OPX.SetGang(identifier, name, grade)
 	end)
 end
 
---- Adds a membership without changing which gang is primary.
----@param identifier Player|Source|CitizenId
----@param name string
----@param grade integer
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.AddPlayerToGang
+--- @description Adds a gang membership without changing the primary gang.
+--- @param identifier {Player|Source|CitizenId}
+--- @param name {string}
+--- @param grade {integer}
+--- @returns {Result}
 function OPX.AddPlayerToGang(identifier, name, grade)
 	return withCharacter(identifier, nil, function(player)
 		local resolved = OPX.ResolveGang(name, grade)
@@ -252,10 +271,12 @@ function OPX.AddPlayerToGang(identifier, name, grade)
 	end)
 end
 
---- Removes a membership; if it was the primary gang, the character falls back to the default.
----@param identifier Player|Source|CitizenId
----@param name string
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.RemovePlayerFromGang
+--- @description Removes a gang membership, falling back to the default gang.
+--- @param identifier {Player|Source|CitizenId}
+--- @param name {string}
+--- @returns {Result}
 function OPX.RemovePlayerFromGang(identifier, name)
 	return withCharacter(identifier, 'gang', function(player)
 		local left = leaveGroup(player, 'gang', name)
@@ -275,7 +296,6 @@ function OPX.RemovePlayerFromGang(identifier, name)
 			end
 		end
 
-		-- announced even for a non-primary removal, because leaveGroup changed PlayerData.gangs
 		if not announced then player.Functions.UpdatePlayerData() end
 
 		OPX.Logger.player(player, 'gang.removed', name)
@@ -283,10 +303,12 @@ function OPX.RemovePlayerFromGang(identifier, name)
 	end)
 end
 
---- Switches which of a character's existing gangs is primary.
----@param identifier Player|Source|CitizenId
----@param name string
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.SetPlayerPrimaryGang
+--- @description Makes one of a character's existing gangs the primary one.
+--- @param identifier {Player|Source|CitizenId}
+--- @param name {string}
+--- @returns {Result}
 function OPX.SetPlayerPrimaryGang(identifier, name)
 	return withCharacter(identifier, 'gang', function(player)
 		local grade = player.PlayerData.gangs[name]
@@ -295,10 +317,12 @@ function OPX.SetPlayerPrimaryGang(identifier, name)
 	end)
 end
 
---- Everyone in a group, online or not. Coroutine only.
----@param groupType GroupType
----@param name string
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.GetGroupMembers
+--- @description Answers everyone in a job or gang, online or not.
+--- @param groupType {GroupType}
+--- @param name {string}
+--- @returns {Result}
 function OPX.GetGroupMembers(groupType, name)
 	if groupType ~= 'job' and groupType ~= 'gang' then
 		return Result.err('error.badRequest', tostring(groupType))
@@ -306,10 +330,12 @@ function OPX.GetGroupMembers(groupType, name)
 	return OPX.Storage.Players.membersOf(groupType, name)
 end
 
---- Loaded characters whose primary job is `name`. In-memory: it does not yield.
----@param name string
----@param onDutyOnly? boolean
----@return Player[]
+--- @author DemiAutomatic
+--- @method OPX.GetPlayersByJob
+--- @description Lists loaded characters whose primary job is the one named.
+--- @param name {string}
+--- @param onDutyOnly {boolean|nil}
+--- @returns {Player[]}
 function OPX.GetPlayersByJob(name, onDutyOnly)
 	local out, n = {}, 0
 	local players = OPX.GetPlayers()
@@ -323,9 +349,11 @@ function OPX.GetPlayersByJob(name, onDutyOnly)
 	return out
 end
 
---- Loaded characters whose primary gang is `name`. In-memory: it does not yield.
----@param name string
----@return Player[]
+--- @author DemiAutomatic
+--- @method OPX.GetPlayersByGang
+--- @description Lists loaded characters whose primary gang is the one named.
+--- @param name {string}
+--- @returns {Player[]}
 function OPX.GetPlayersByGang(name)
 	local out, n = {}, 0
 	local players = OPX.GetPlayers()

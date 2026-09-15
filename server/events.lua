@@ -1,10 +1,17 @@
---- Every net-event handler the core registers. Nothing here decides anything: each handler
---- validates and calls into server/character.lua or server/player.lua.
+--- @author DemiAutomatic
+--- @file server/events.lua
+--- @description Every platform and net event handler the core registers.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The event name tables published on OPX.Events.
 local Events = OPX.Events
 
---- `source` is not populated for a host-fanned event, so the id arrives as an argument and as
---- a string.
+--- @author DemiAutomatic
+--- @event onPlayerConnected
+--- @description Starts entry for a connecting player, id read from the argument.
+--- @param rawPlayerId {integer|string}
+--- @param playerName {string|nil}
 AddEventHandler(Events.Platform.PLAYER_CONNECTED, function(rawPlayerId, playerName)
 	local source = tonumber(rawPlayerId)
 	if not source or source <= 0 then
@@ -15,13 +22,15 @@ AddEventHandler(Events.Platform.PLAYER_CONNECTED, function(rawPlayerId, playerNa
 	OPX.Lifecycle.beginEntry(source)
 end)
 
-local forgetThrottle -- forward-declared: defined below, used by the handler above it
+local forgetThrottle
 
+--- @author DemiAutomatic
+--- @method departed
+--- @description Marks a departing session, logs its character out and forgets it.
+--- @param source {integer|string}
 local function departed(source)
 	source = tonumber(source)
 	if not source then return end
-	-- before the logout: a player on the way out is not put back in a selection bucket, and the
-	-- host drops a departed player's bucket by itself
 	local session = OPX.Sessions[source]
 	if session then session.departing = true end
 	OPX.Logout(source)
@@ -29,14 +38,19 @@ local function departed(source)
 	forgetThrottle(source)
 end
 
---- Best-effort: a departure nobody reports is covered by the `userId` re-check in
---- `OPX.EnsureSession`, and `OPX.Logout` is idempotent.
+--- @author DemiAutomatic
+--- @event onPlayerDisconnected
+--- @description Tears down everything the core holds for a departing player.
+--- @param rawPlayerId {integer|string}
 AddEventHandler('onPlayerDisconnected', function(rawPlayerId)
 	departed(rawPlayerId)
 end)
 
---- The gate opened. `liveness_lost:<res>[,<res>...]` means a hold passed its liveness deadline
---- and the platform concluded the holder was gone.
+--- @author DemiAutomatic
+--- @event onPlayerReady
+--- @description Logs a readiness gate opened because a hold lost liveness.
+--- @param rawPlayerId {integer|string}
+--- @param detail {string|nil}
 AddEventHandler(Events.Platform.PLAYER_READY, function(rawPlayerId, detail)
 	local source = tonumber(rawPlayerId)
 	if not source then return end
@@ -55,19 +69,18 @@ AddEventHandler(Events.Platform.PLAYER_READY, function(rawPlayerId, detail)
 	end
 end)
 
---- Clears everything keyed by a departing source, including the doorway cooldowns below.
----@param source Source
+--- @author DemiAutomatic
+--- @method forgetThrottle
+--- @description Clears the cooldowns and audit dedupe keyed by a departing source.
+--- @param source {integer}
 function forgetThrottle(source)
 	OPX.ForgetCooldowns(source)
-	-- the audit dedupe is keyed by source too, and a source is recycled
 	if OPX.Logger and OPX.Logger.forget then OPX.Logger.forget(source) end
 end
 
--- Every handler below checks a cooldown BEFORE its `CreateThread`, on a `.request` key of its
--- own: `OPX.Cooling` records the attempt it allows, so sharing a key makes it refuse itself.
-
---- The client announcing itself, which is what refills the roster after a reload:
---- `onPlayerConnected` does not re-fire for players who are already here.
+--- @author DemiAutomatic
+--- @event opx77:server:ready
+--- @description Resends the roster, or playerLoaded, to a client announcing itself.
 RegisterNetEvent(Events.Server.READY, function()
 	local src = tonumber(source)
 	if not src then return end
@@ -76,21 +89,21 @@ RegisterNetEvent(Events.Server.READY, function()
 	local session = OPX.EnsureSession(src)
 	if not session then return end
 
-	-- already loaded means re-syncing: the roster would re-open the selection screen
 	local player = OPX.GetPlayer(src)
 	if player then
 		TriggerClientEvent(Events.Client.PLAYER_LOADED, src, player.PlayerData)
 		return
 	end
 
-	-- a join whose move was refused on connect, or a player still behind the gate when this VM
-	-- was reloaded. Somebody past the gate has been in the world this session and is left where
-	-- they are: after a reload that is everybody who was playing
 	if not OPX.Lifecycle.isReady(src) then OPX.Buckets.isolate(src, 'ready') end
 
 	CreateThread(function() OPX.SendCharacters(src) end)
 end)
 
+--- @author DemiAutomatic
+--- @event opx77:server:selectCharacter
+--- @description Enters the world as one of the caller's characters.
+--- @param payload {any}
 RegisterNetEvent(Events.Server.SELECT_CHARACTER, function(payload)
 	local src = tonumber(source)
 	if not src then return end
@@ -107,8 +120,6 @@ RegisterNetEvent(Events.Server.SELECT_CHARACTER, function(payload)
 	CreateThread(function()
 		local selected = OPX.SelectCharacter(src, citizenId)
 		if not selected.ok then
-			-- not on the cooldown's own refusal: that branch is the one an attacker takes, so
-			-- logging it turns the limit into a line-per-message writer
 			if selected.error ~= 'error.tooFast' then
 				Open77.log.warn(('[events] %d could not select %s: %s')
 					:format(src, OPX.Logger.safe(citizenId), tostring(selected.error)))
@@ -119,6 +130,10 @@ RegisterNetEvent(Events.Server.SELECT_CHARACTER, function(payload)
 	end)
 end)
 
+--- @author DemiAutomatic
+--- @event opx77:server:createCharacter
+--- @description Creates a character on the caller's account and resends the roster.
+--- @param payload {any}
 RegisterNetEvent(Events.Server.CREATE_CHARACTER, function(payload)
 	local src = tonumber(source)
 	if not src then return end
@@ -144,6 +159,10 @@ RegisterNetEvent(Events.Server.CREATE_CHARACTER, function(payload)
 	end)
 end)
 
+--- @author DemiAutomatic
+--- @event opx77:server:deleteCharacter
+--- @description Soft-deletes one of the caller's characters and resends the roster.
+--- @param payload {any}
 RegisterNetEvent(Events.Server.DELETE_CHARACTER, function(payload)
 	local src = tonumber(source)
 	if not src then return end
@@ -168,13 +187,14 @@ RegisterNetEvent(Events.Server.DELETE_CHARACTER, function(payload)
 	end)
 end)
 
---- A position report is a hint. Only the heading is kept: x, y and z are re-derived from the
---- server snapshot at save time, so a client that lies about them lies to nobody.
+--- @author DemiAutomatic
+--- @event opx77:server:reportPosition
+--- @description Keeps the client's heading hint for the next position sample.
+--- @param payload {any}
 RegisterNetEvent(Events.Server.REPORT_POSITION, function(payload)
 	local src = tonumber(source)
 	if not src then return end
 
-	-- literal, not CLIENT.POSITION_REPORT_MS: this VM never loads config/client.lua
 	if OPX.Cooling(src, 'heading', 1000) then return end
 
 	local player = OPX.GetPlayer(src)

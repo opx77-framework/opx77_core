@@ -1,24 +1,27 @@
---- Checks for values crossing a trust boundary. The platform authenticates who sent a
---- message, never what is inside it.
+--- @author DemiAutomatic
+--- @file shared/validate.lua
+--- @description Checks for values that cross a trust boundary.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The Result constructors, read through a local.
 local Result = OPX.Result
 
 OPX.Validate = {}
 local Validate = OPX.Validate
 
---- Trims, then enforces length and an optional pattern. Length is in characters, not bytes;
---- malformed UTF-8 is refused rather than measured.
----@param value any
----@param opts? { min?: integer, max?: integer, pattern?: string }
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Validate.text
+--- @description Trims text and checks its length in characters and its pattern.
+--- @param value {any}
+--- @param opts {table|nil} min, max and pattern.
+--- @returns {Result}
 function OPX.Validate.text(value, opts)
 	opts = opts or {}
 	if type(value) ~= 'string' then
 		return Result.err('type', 'expected string, got ' .. type(value))
 	end
 
-	-- bounded in BYTES before the trim, the only work here that scales with the input: a UTF-8
-	-- character is up to four bytes, and 1024 caps a caller that passed no `max`
 	local ceiling = math.min(((opts.max or 255) * 4) + 16, 1024)
 	if #value > ceiling then return Result.err('too-long') end
 
@@ -33,9 +36,12 @@ function OPX.Validate.text(value, opts)
 	return Result.ok(trimmed)
 end
 
----@param value any
----@param opts? { integer?: boolean, min?: number, max?: number }
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Validate.number
+--- @description Reads a finite number and checks integrality and bounds.
+--- @param value {any}
+--- @param opts {table|nil} integer, min and max.
+--- @returns {Result}
 function OPX.Validate.number(value, opts)
 	opts = opts or {}
 	local n = tonumber(value)
@@ -49,9 +55,12 @@ function OPX.Validate.number(value, opts)
 	return Result.ok(n)
 end
 
----@param value any
----@param allowed table<any, boolean> a set, so the check is one hash read
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Validate.oneOf
+--- @description Accepts a value only when the allowed set holds it.
+--- @param value {any}
+--- @param allowed {table<any, boolean>}
+--- @returns {Result}
 function OPX.Validate.oneOf(value, allowed)
 	if allowed[value] then return Result.ok(value) end
 	return Result.err('not-allowed', tostring(value))

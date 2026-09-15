@@ -1,14 +1,26 @@
---- Every statement the core runs about a character, in one file. Everything here returns a
---- Result and yields: coroutine only. The schema is in `sql/`.
+--- @author DemiAutomatic
+--- @file server/storage/players.lua
+--- @description Every statement the core runs about a character.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The Result constructors every statement answers with.
 local Result = OPX.Result
+
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The database access every statement runs through.
 local Storage = OPX.Storage
 
 OPX.Storage.Players = {}
 local Players = OPX.Storage.Players
 
---- Accepts a string or an already-decoded table, because a bridge build may do either. A
---- column that fails to decode is absent rather than fatal.
+--- @author DemiAutomatic
+--- @method decode
+--- @description Decodes a JSON column, answering the fallback when it cannot.
+--- @param value {any}
+--- @param fallback {table|nil}
+--- @returns {table|nil}
 local function decode(value, fallback)
 	if type(value) == 'table' then return value end
 	if type(value) ~= 'string' or value == '' then return fallback end
@@ -17,23 +29,30 @@ local function decode(value, fallback)
 	return decoded
 end
 
+--- @author DemiAutomatic
+--- @method encode
+--- @description Encodes a JSON column, an absent value as an empty object.
+--- @param value {table|nil}
+--- @returns {string}
 local function encode(value)
 	return json.encode(value or {})
 end
 
---- A nullable JSON column's parameter. The bridge drops a nil parameter rather than binding
---- NULL, and MySqlConnector then refuses the statement (`Parameter '@x' must be defined`), so
---- absence travels as "" and the statement turns it back into NULL with NULLIF: encoded JSON is
---- never empty.
+--- @author DemiAutomatic
+--- @method nullable
+--- @description Encodes a nullable JSON column, absence as an empty string.
+--- @param value {any}
+--- @returns {string}
 local function nullable(value)
 	return value ~= nil and json.encode(value) or ''
 end
 
---- Records the account behind a session. `display_name` is assigned unconditionally because
---- ON UPDATE CURRENT_TIMESTAMP only fires when a column changes.
----@param userId UserId
----@param displayName? string
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.upsertAccount
+--- @description Records the account behind a session and stamps its visit.
+--- @param userId {UserId}
+--- @param displayName {string|nil}
+--- @returns {Result}
 function OPX.Storage.Players.upsertAccount(userId, displayName)
 	return Storage.execute([[
 INSERT INTO opx77_users (user_id, display_name)
@@ -44,8 +63,11 @@ ON DUPLICATE KEY UPDATE
   ]], { user = userId, name = displayName or '' })
 end
 
---- Turns one database row into the shape the rest of the core passes around. Every JSON
---- column gets a default; `appearance` defaults to nil, meaning "never set".
+--- @author DemiAutomatic
+--- @method toEntity
+--- @description Turns a character row into the entity the core passes around.
+--- @param row {table|nil}
+--- @returns {table|nil}
 local function toEntity(row)
 	if not row then return nil end
 	return {
@@ -64,12 +86,16 @@ local function toEntity(row)
 	}
 end
 
+--- @author DemiAutomatic
+--- @type {fun(row: table|nil): table|nil}
+--- @description Turns a character row into an entity, for plug-ins.
 Players.toEntity = toEntity
 
---- Every living character on an account, most recently played first; never-played characters
---- sort to the top, where the player is looking.
----@param userId UserId
----@return Result  ok value is a list of character entities
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.fetchAll
+--- @description Lists an account's living characters, never-played and recent first.
+--- @param userId {UserId}
+--- @returns {Result}
 function OPX.Storage.Players.fetchAll(userId)
 	local rows = Storage.query([[
 SELECT citizen_id, user_id, cid, name, char_info, money, job, gang,
@@ -86,9 +112,11 @@ SELECT citizen_id, user_id, cid, name, char_info, money, job, gang,
 	return Result.ok(out)
 end
 
---- One character by citizen id, whoever owns it. Ownership is the caller's check.
----@param citizenId CitizenId
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.fetchOne
+--- @description Reads one living character by citizen id, whoever owns it.
+--- @param citizenId {CitizenId}
+--- @returns {Result}
 function OPX.Storage.Players.fetchOne(citizenId)
 	local row = Storage.single([[
 SELECT citizen_id, user_id, cid, name, char_info, money, job, gang,
@@ -102,11 +130,12 @@ SELECT citizen_id, user_id, cid, name, char_info, money, job, gang,
 	return Result.ok(toEntity(row.value))
 end
 
---- The lowest free slot number on an account. Lowest free rather than highest plus one, so a
---- deleted slot is reused instead of the numbers climbing past the configured limit.
----@param userId UserId
----@param slots integer
----@return Result  err character.limit when the account is full
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.nextCid
+--- @description Answers the lowest free slot number on an account.
+--- @param userId {UserId}
+--- @param slots {integer}
+--- @returns {Result}
 function OPX.Storage.Players.nextCid(userId, slots)
 	local rows = Storage.query([[
 SELECT cid FROM opx77_characters
@@ -124,10 +153,11 @@ SELECT cid FROM opx77_characters
 	return Result.err('character.limit', tostring(slots))
 end
 
---- Creates a character. Collisions are decided by the unique key on `citizen_id`, not by a
---- SELECT first: two players creating in the same tick would both pass that check.
----@param entity table
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.insert
+--- @description Inserts a new character row, the key deciding a collision.
+--- @param entity {table}
+--- @returns {Result}
 function OPX.Storage.Players.insert(entity)
 	return Storage.execute([[
 INSERT INTO opx77_characters
@@ -149,11 +179,12 @@ VALUES
 	})
 end
 
---- Writes a loaded character back. `citizen_id` and `user_id` are not in the SET list: an
---- UPDATE that could move a character to another account is how characters get stolen.
----@param entity table
----@param loggedOut? boolean stamps last_logged_out
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.save
+--- @description Writes a loaded character back, never its identity columns.
+--- @param entity {table}
+--- @param loggedOut {boolean|nil} Stamps last_logged_out.
+--- @returns {Result}
 function OPX.Storage.Players.save(entity, loggedOut)
 	return Storage.execute([[
 UPDATE opx77_characters
@@ -181,11 +212,12 @@ UPDATE opx77_characters
 	})
 end
 
---- The one column, written the moment a face is committed rather than at the next autosave.
---- `nil` clears it, which is what "this character has no stored face" means.
----@param citizenId CitizenId
----@param appearance table|nil a canonical snapshot, already validated
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.saveAppearance
+--- @description Writes a character's appearance column at once; nil clears it.
+--- @param citizenId {CitizenId}
+--- @param appearance {AppearanceSnapshot|nil}
+--- @returns {Result}
 function OPX.Storage.Players.saveAppearance(citizenId, appearance)
 	return Storage.execute([[
 UPDATE opx77_characters
@@ -197,10 +229,11 @@ UPDATE opx77_characters
 	})
 end
 
---- What a character wears, as stored. Ownership and deletion are the caller's checks.
----@param citizenId CitizenId
----@return Result  ok value is the decoded document, or nil when none is stored; err
----        `clothing-unreadable` for a row whose JSON does not decode, which is not "none"
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.fetchClothing
+--- @description Reads a character's stored clothing document, or nil for none.
+--- @param citizenId {CitizenId}
+--- @returns {Result}
 function OPX.Storage.Players.fetchClothing(citizenId)
 	local row = Storage.single([[
 SELECT clothing FROM opx77_character_clothing
@@ -214,10 +247,12 @@ SELECT clothing FROM opx77_character_clothing
 	return Result.ok(decoded)
 end
 
---- Writes what a character wears, the moment it is saved rather than at the next autosave.
----@param citizenId CitizenId
----@param encoded string a canonical record, already validated and encoded
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.saveClothing
+--- @description Writes a character's encoded clothing record at once.
+--- @param citizenId {CitizenId}
+--- @param encoded {string} A validated record, already encoded.
+--- @returns {Result}
 function OPX.Storage.Players.saveClothing(citizenId, encoded)
 	return Storage.execute([[
 INSERT INTO opx77_character_clothing (citizen_id, clothing)
@@ -226,10 +261,11 @@ ON DUPLICATE KEY UPDATE clothing = VALUES(clothing)
   ]], { citizen = citizenId, clothing = encoded })
 end
 
---- How many rows this account has ever owned, soft-deleted ones included: the one read in the
---- core that does not filter `deleted_at`, and what bounds create-delete-create.
----@param userId UserId
----@return Result  ok value is the count
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.countRows
+--- @description Counts every character row an account ever wrote, deleted included.
+--- @param userId {UserId}
+--- @returns {Result}
 function OPX.Storage.Players.countRows(userId)
 	local row = Storage.single([[
 SELECT COUNT(*) AS total FROM opx77_characters WHERE user_id = @user
@@ -238,10 +274,11 @@ SELECT COUNT(*) AS total FROM opx77_characters WHERE user_id = @user
 	return Result.ok(tonumber(row.value and row.value.total) or 0)
 end
 
---- Soft delete: the row stays, so a mistake is recoverable and the citizen id is never
---- reissued to a stranger.
----@param citizenId CitizenId
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.softDelete
+--- @description Marks a character deleted, keeping its row.
+--- @param citizenId {CitizenId}
+--- @returns {Result}
 function OPX.Storage.Players.softDelete(citizenId)
 	return Storage.execute([[
 UPDATE opx77_characters SET deleted_at = CURRENT_TIMESTAMP
@@ -249,9 +286,11 @@ UPDATE opx77_characters SET deleted_at = CURRENT_TIMESTAMP
   ]], { citizen = citizenId })
 end
 
---- Every job and gang a character belongs to, as two `name -> grade` maps.
----@param citizenId CitizenId
----@return Result  ok value is { jobs = table, gangs = table }
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.fetchGroups
+--- @description Reads a character's job and gang memberships as grade maps.
+--- @param citizenId {CitizenId}
+--- @returns {Result}
 function OPX.Storage.Players.fetchGroups(citizenId)
 	local rows = Storage.query([[
 SELECT group_type, group_name, grade
@@ -273,13 +312,14 @@ SELECT group_type, group_name, grade
 	return Result.ok({ jobs = jobs, gangs = gangs })
 end
 
---- Joins a group, or promotes within one. Which of the two it is falls out of the composite
---- primary key rather than out of whichever call site remembered to check.
----@param citizenId CitizenId
----@param groupType GroupType
----@param groupName string
----@param grade integer
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.upsertGroup
+--- @description Joins a group, or changes the grade held in it.
+--- @param citizenId {CitizenId}
+--- @param groupType {GroupType}
+--- @param groupName {string}
+--- @param grade {integer}
+--- @returns {Result}
 function OPX.Storage.Players.upsertGroup(citizenId, groupType, groupName, grade)
 	return Storage.execute([[
 INSERT INTO opx77_character_groups (citizen_id, group_type, group_name, grade)
@@ -288,10 +328,13 @@ ON DUPLICATE KEY UPDATE grade = VALUES(grade)
   ]], { citizen = citizenId, type = groupType, name = groupName, grade = grade })
 end
 
----@param citizenId CitizenId
----@param groupType GroupType
----@param groupName string
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.removeGroup
+--- @description Removes one job or gang membership row.
+--- @param citizenId {CitizenId}
+--- @param groupType {GroupType}
+--- @param groupName {string}
+--- @returns {Result}
 function OPX.Storage.Players.removeGroup(citizenId, groupType, groupName)
 	return Storage.execute([[
 DELETE FROM opx77_character_groups
@@ -299,11 +342,12 @@ DELETE FROM opx77_character_groups
   ]], { citizen = citizenId, type = groupType, name = groupName })
 end
 
---- Everyone in a group, online or not. Bounded at 200: an unbounded result set is a stall on
---- the database worker.
----@param groupType GroupType
----@param groupName string
----@return Result  ok value is a list of { citizenId, grade, name }
+--- @author DemiAutomatic
+--- @method OPX.Storage.Players.membersOf
+--- @description Lists at most 200 living members of a group, highest grade first.
+--- @param groupType {GroupType}
+--- @param groupName {string}
+--- @returns {Result}
 function OPX.Storage.Players.membersOf(groupType, groupName)
 	local rows = Storage.query([[
 SELECT g.citizen_id, g.grade, c.name, c.char_info

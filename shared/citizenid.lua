@@ -1,17 +1,38 @@
---- Citizen IDs, e.g. "H7K-M4X3": 23 unambiguous symbols, six payload and one check. The
---- prime modulus is what catches every substitution and transposition -- do not change it.
+--- @author DemiAutomatic
+--- @file shared/citizenid.lua
+--- @description Citizen ids: seven unambiguous symbols with a prime-modulus check.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The Result constructors, read through a local.
 local Result = OPX.Result
 
 OPX.CitizenId = {}
 local CitizenId = OPX.CitizenId
 
+--- @author DemiAutomatic
+--- @type {string}
+--- @description The 23 symbols a citizen id is written with.
 CitizenId.ALPHABET = '34679ACDEFGHJKMNPRTWXYZ'
 
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description The alphabet size, which is also the check modulus.
 local BASE = #CitizenId.ALPHABET
+
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description How many symbols carry the payload before the check.
 local PAYLOAD = 6
+
+--- @author DemiAutomatic
+--- @type {integer[]}
+--- @description The weight of each payload position in the check sum.
 local WEIGHTS = { 2, 3, 4, 5, 6, 7 }
 
+--- @author DemiAutomatic
+--- @type {table<string, integer>}
+--- @description Symbol to value and value to symbol lookups.
 local valueOf, symbolOf = {}, {}
 for i = 1, BASE do
 	local symbol = CitizenId.ALPHABET:sub(i, i)
@@ -19,17 +40,29 @@ for i = 1, BASE do
 	symbolOf[i - 1] = symbol
 end
 
+--- @author DemiAutomatic
+--- @method checkSymbolFor
+--- @description Answers the check symbol that completes a weighted sum.
+--- @param weightedSum {integer}
+--- @returns {string}
 local function checkSymbolFor(weightedSum)
 	return symbolOf[(BASE - weightedSum % BASE) % BASE]
 end
 
+--- @author DemiAutomatic
+--- @method grouped
+--- @description Writes seven raw symbols in their three-dash-four display form.
+--- @param raw {string}
+--- @returns {string}
 local function grouped(raw)
 	return raw:sub(1, 3) .. '-' .. raw:sub(4)
 end
 
---- Builds an id from six payload values, in a single pass.
----@param values integer[]
----@return CitizenId
+--- @author DemiAutomatic
+--- @method OPX.CitizenId.build
+--- @description Builds an id from six payload values in one pass.
+--- @param values {integer[]}
+--- @returns {CitizenId}
 function OPX.CitizenId.build(values)
 	local symbols, sum = {}, 0
 	for i = 1, PAYLOAD do
@@ -41,9 +74,11 @@ function OPX.CitizenId.build(values)
 	return grouped(table.concat(symbols))
 end
 
----@param rng? fun(low: integer, high: integer): integer injectable, so generation can be
----        made deterministic
----@return CitizenId
+--- @author DemiAutomatic
+--- @method OPX.CitizenId.generate
+--- @description Draws a new random citizen id.
+--- @param rng {fun(low: integer, high: integer): integer|nil} Injectable for deterministic generation.
+--- @returns {CitizenId}
 function OPX.CitizenId.generate(rng)
 	rng = rng or math.random
 	local values = {}
@@ -51,16 +86,16 @@ function OPX.CitizenId.generate(rng)
 	return CitizenId.build(values)
 end
 
---- Parses player input: forgiving about case and separators, strict about content. An unknown
---- symbol is rejected, never dropped: dropping turns one id into somebody else's.
----@param input any
----@return Result
+--- @author DemiAutomatic
+--- @method OPX.CitizenId.parse
+--- @description Reads typed input, forgiving on case and separators, strict on symbols.
+--- @param input {any}
+--- @returns {Result}
 function OPX.CitizenId.parse(input)
 	if type(input) ~= 'string' then
 		return Result.err('type', 'expected string')
 	end
 
-	-- checked before upper() and gsub() copy the string twice, so a refusal has a fixed cost
 	if #input > 32 then
 		return Result.err('length', ('expected %d symbols, got %d'):format(PAYLOAD + 1, #input))
 	end
@@ -91,9 +126,11 @@ function OPX.CitizenId.parse(input)
 	return Result.ok(grouped(cleaned))
 end
 
---- For guarding an internal call site. Use `parse` on input, so the caller learns why.
----@param value any
----@return boolean
+--- @author DemiAutomatic
+--- @method OPX.CitizenId.isValid
+--- @description Whether a value is a valid citizen id, for internal guards.
+--- @param value {any}
+--- @returns {boolean}
 function OPX.CitizenId.isValid(value)
 	return CitizenId.parse(value).ok
 end

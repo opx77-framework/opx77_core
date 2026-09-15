@@ -1,28 +1,41 @@
---- Reads and writes for `opx77_vehicles`. No policy here: server/vehicles.lua decides.
+--- @author DemiAutomatic
+--- @file server/storage/vehicles.lua
+--- @description Reads and writes for the owned vehicles table.
 
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The Result constructors every statement answers with.
 local Result = OPX.Result
+
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The database access every statement runs through.
 local Storage = OPX.Storage
 
 OPX.Storage.Vehicles = {}
 local Vehicles = OPX.Storage.Vehicles
 
---- Where a vehicle is, as a number rather than a string: the column is a TINYINT and a
---- gamemode adds its own states without a migration.
+--- @author DemiAutomatic
+--- @type {table<string, integer>}
+--- @description Where a vehicle is, as stored in the state column.
 Vehicles.STATE = { OUT = 0, STORED = 1, IMPOUNDED = 2 }
 
---- A nullable column's parameter. The bridge drops a nil parameter rather than binding NULL,
---- and MySqlConnector then refuses the statement, so absence travels as "" and the statement
---- turns it back into NULL with NULLIF: neither encoded JSON nor an appearance name is empty.
----@param value any
----@param encoded boolean  whether the column holds JSON
----@return string
+--- @author DemiAutomatic
+--- @method nullable
+--- @description Binds a nullable column, absence as an empty string.
+--- @param value {any}
+--- @param encoded {boolean} Whether the column holds JSON.
+--- @returns {string}
 local function nullable(value, encoded)
 	if value == nil then return '' end
 	return encoded and json.encode(value) or tostring(value)
 end
 
----@param row table
----@return table
+--- @author DemiAutomatic
+--- @method toEntity
+--- @description Turns a vehicle row into the entity server/vehicles.lua uses.
+--- @param row {table}
+--- @returns {table}
 local function toEntity(row)
 	local state = tonumber(row.state)
 	local health = tonumber(row.health)
@@ -34,16 +47,17 @@ local function toEntity(row)
 		garage = row.garage,
 		state = OPX.Math.isFinite(state) and state or Vehicles.STATE.STORED,
 		health = OPX.Math.isFinite(health) and health or 1.0,
-		-- the `body` column carries the whole damage view: body, glass, lights, tires,
-		-- detachedParts
 		damage = row.body and json.decode(row.body) or nil,
 		paint = row.paint and json.decode(row.paint) or nil,
 		metadata = row.metadata and json.decode(row.metadata) or {},
 	}
 end
 
----@param citizenId string
----@return table result  Result of a list of vehicle entities
+--- @author DemiAutomatic
+--- @method OPX.Storage.Vehicles.fetchByOwner
+--- @description Lists every vehicle a character owns, oldest first.
+--- @param citizenId {string}
+--- @returns {Result}
 function OPX.Storage.Vehicles.fetchByOwner(citizenId)
 	local rows = Storage.query([[
 SELECT plate, citizen_id, record, appearance, garage, state, health, body, paint, metadata
@@ -60,8 +74,11 @@ SELECT plate, citizen_id, record, appearance, garage, state, health, body, paint
 	return Result.ok(list)
 end
 
----@param plate string
----@return table result  Result of one vehicle entity
+--- @author DemiAutomatic
+--- @method OPX.Storage.Vehicles.fetchOne
+--- @description Reads one vehicle by its plate.
+--- @param plate {string}
+--- @returns {Result}
 function OPX.Storage.Vehicles.fetchOne(plate)
 	local row = Storage.single([[
 SELECT plate, citizen_id, record, appearance, garage, state, health, body, paint, metadata
@@ -74,9 +91,11 @@ SELECT plate, citizen_id, record, appearance, garage, state, health, body, paint
 	return Result.ok(toEntity(row.value))
 end
 
---- Creates one. The unique key on `plate` decides a collision, not a SELECT beforehand.
----@param entity table
----@return table result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Vehicles.insert
+--- @description Inserts a vehicle row, the plate key deciding a collision.
+--- @param entity {table}
+--- @returns {Result}
 function OPX.Storage.Vehicles.insert(entity)
 	return Storage.execute([[
 INSERT INTO opx77_vehicles (plate, citizen_id, record, appearance, garage, state, health,
@@ -97,9 +116,11 @@ VALUES (@plate, @citizen, @record, NULLIF(@appearance, ''), @garage, @state, @he
 	})
 end
 
---- Writes back what changes while a vehicle is out: condition, paint, and where it belongs.
----@param entity table
----@return table result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Vehicles.save
+--- @description Writes back a vehicle's condition, paint, state and garage.
+--- @param entity {table}
+--- @returns {Result}
 function OPX.Storage.Vehicles.save(entity)
 	return Storage.execute([[
 UPDATE opx77_vehicles
@@ -117,11 +138,13 @@ UPDATE opx77_vehicles
 	})
 end
 
---- One column, so a state change does not carry a stale copy of everything else.
----@param plate string
----@param state integer
----@param garage string|nil
----@return table result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Vehicles.setState
+--- @description Writes only a vehicle's state, and its garage when given.
+--- @param plate {string}
+--- @param state {integer}
+--- @param garage {string|nil}
+--- @returns {Result}
 function OPX.Storage.Vehicles.setState(plate, state, garage)
 	if garage == nil then
 		return Storage.execute(
@@ -133,15 +156,20 @@ function OPX.Storage.Vehicles.setState(plate, state, garage)
 		{ plate = plate, state = state, garage = garage })
 end
 
----@param plate string
----@return table result
+--- @author DemiAutomatic
+--- @method OPX.Storage.Vehicles.delete
+--- @description Deletes a vehicle row by its plate.
+--- @param plate {string}
+--- @returns {Result}
 function OPX.Storage.Vehicles.delete(plate)
 	return Storage.execute('DELETE FROM opx77_vehicles WHERE plate = @plate', { plate = plate })
 end
 
---- How many one character owns, for the per-character ceiling.
----@param citizenId string
----@return table result  Result of an integer
+--- @author DemiAutomatic
+--- @method OPX.Storage.Vehicles.countByOwner
+--- @description Counts the vehicles one character owns.
+--- @param citizenId {string}
+--- @returns {Result}
 function OPX.Storage.Vehicles.countByOwner(citizenId)
 	local row = Storage.single(
 		'SELECT COUNT(*) AS total FROM opx77_vehicles WHERE citizen_id = @citizen',

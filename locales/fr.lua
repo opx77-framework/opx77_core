@@ -1,3 +1,7 @@
+--- @author DemiAutomatic
+--- @file locales/fr.lua
+--- @description French player-facing text and refusal codes of the core.
+
 OPX.Locale.register('fr', {
 	['character.limit'] = 'Vous avez déjà {max} personnages.',
 	['character.rowLimit'] = "Ce compte a créé autant de personnages qu'il le peut.",
@@ -56,15 +60,11 @@ OPX.Locale.register('fr', {
 
 	['command.inGameOnly'] = 'Cette commande doit être lancée en jeu.',
 	['command.usage.select'] = 'usage : /opx77.select <identifiantCitoyen>',
-	['command.usage.create'] = 'usage : /opx77.create <prénom> <nom> ' ..
-		'[nomad|streetkid|corpo] [female|male]',
+	['command.usage.create'] = 'usage : /opx77.create <prénom> <nom> [nomad|streetkid|corpo] [female|male]',
 	['command.usage.delete'] = 'usage : /opx77.delete <identifiantCitoyen>',
-	['command.usage.money'] = 'usage : /opx77.money <numéroJoueur|identifiantCitoyen> <TYPE> ' ..
-		'<montant> (négatif pour retirer)',
-	['command.usage.job'] = 'usage : /opx77.job <numéroJoueur|identifiantCitoyen> <métier> ' ..
-		'[grade]',
-	['command.usage.gang'] = 'usage : /opx77.gang <numéroJoueur|identifiantCitoyen> <gang> ' ..
-		'[grade]',
+	['command.usage.money'] = 'usage : /opx77.money <numéroJoueur|identifiantCitoyen> <TYPE> <montant> (négatif pour retirer)',
+	['command.usage.job'] = 'usage : /opx77.job <numéroJoueur|identifiantCitoyen> <métier> [grade]',
+	['command.usage.gang'] = 'usage : /opx77.gang <numéroJoueur|identifiantCitoyen> <gang> [grade]',
 	['command.usage.group'] = 'usage : /opx77.group <job|gang> <nom>',
 	['command.noSession'] = "Le joueur {id} n'a pas de session.",
 	['command.positionUnreadable'] = 'Votre position est illisible pour le moment.',

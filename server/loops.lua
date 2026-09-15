@@ -1,20 +1,27 @@
---- The two background jobs: keeping positions fresh, and paying people.
+--- @author DemiAutomatic
+--- @file server/loops.lua
+--- @description Background position sampling, autosave, paychecks and the stop save.
 
--- sampled this often because by the time a disconnect handler runs the session is usually
--- gone and Open77.players.position answers nil
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Milliseconds between two passes of the background loop.
 local SAMPLE_MS = 1000
 
---- Metres. Not zero: a standing player's position wobbles by centimetres as the animation
---- settles, and zero would make every idle character a moving one.
+--- @author DemiAutomatic
+--- @type {number}
+--- @description Metres a character must move before its row is dirty.
 local MOVED_METRES = 1.0
 
---- citizenId -> the position and revision at the last successful write.
+--- @author DemiAutomatic
+--- @type {table<string, table>}
+--- @description Position and revision at each character's last successful write.
 local lastWritten = {}
 
---- True when the row would come out different. Two questions, because position sits outside
---- the revision count: a 1 Hz sample routed through a mutator would dirty everyone every tick.
----@param player Player
----@return boolean
+--- @author DemiAutomatic
+--- @method needsWriting
+--- @description Answers whether a character's row would come out different.
+--- @param player {Player}
+--- @returns {boolean}
 local function needsWriting(player)
 	local mark = lastWritten[player.PlayerData.citizenId]
 	if not mark then return true end
@@ -26,10 +33,11 @@ local function needsWriting(player)
 	return OPX.Math.distanceSquared(current, mark.position) >= MOVED_METRES * MOVED_METRES
 end
 
---- Records what was written.
----@param player Player
----@param revision integer the number the character was at when the statement was built, not
----        the one it holds when the write comes back
+--- @author DemiAutomatic
+--- @method remember
+--- @description Records the revision and position a successful write stored.
+--- @param player {Player}
+--- @param revision {integer} Revision read before the write started.
 local function remember(player, revision)
 	local position = player.PlayerData.position
 	lastWritten[player.PlayerData.citizenId] = {
@@ -38,8 +46,9 @@ local function remember(player, revision)
 	}
 end
 
---- Writes every loaded character whose row would come out different. A logout still saves
---- unconditionally.
+--- @author DemiAutomatic
+--- @method autosave
+--- @description Writes every loaded character whose row would come out different.
 local function autosave()
 	local players = OPX.GetPlayers()
 	local written = 0
@@ -47,7 +56,6 @@ local function autosave()
 	for i = 1, #players do
 		local player = players[i]
 		if needsWriting(player) then
-			-- read BEFORE the write: Save yields, and a payment landing then would be marked written
 			local revision = player.Revision
 			local saved = OPX.Save(player, false)
 			if saved.ok then
@@ -63,8 +71,9 @@ local function autosave()
 	end
 end
 
---- The money type a salary lands in. Resolved once, so a name that is not a money type is
---- warned about at boot rather than once per cycle.
+--- @author DemiAutomatic
+--- @type {string}
+--- @description The money type a salary lands in, resolved once at load.
 local PAYCHECK_TYPE = OPX.Config.SERVER.MONEY.PAYCHECK_TYPE
 if not OPX.IsMoneyType(PAYCHECK_TYPE) then
 	Open77.log.warn(('[loops] MONEY.PAYCHECK_TYPE %s is not a money type; paying into %s')
@@ -72,7 +81,9 @@ if not OPX.IsMoneyType(PAYCHECK_TYPE) then
 	PAYCHECK_TYPE = OPX.Config.SHARED.MONEY.DEFAULT
 end
 
---- Pays everyone their job's grade payment, into the configured paycheck money type.
+--- @author DemiAutomatic
+--- @method paycheck
+--- @description Pays every eligible character their grade payment.
 local function paycheck()
 	local players = OPX.GetPlayers()
 	local requireDuty = OPX.Tune.PAYCHECK_REQUIRES_DUTY
@@ -83,7 +94,6 @@ local function paycheck()
 		local definition = OPX.GetJob(job.name)
 		local payment = math.floor(job.payment or 0)
 
-		-- offDutyPay is the job's own override, and the server-wide switch does not overrule it
 		local eligible = payment > 0
 			and (not requireDuty or job.onDuty or (definition and definition.offDutyPay))
 
@@ -100,7 +110,9 @@ local function paycheck()
 	end
 end
 
---- Forgets the write-tracking for characters nobody is playing.
+--- @author DemiAutomatic
+--- @method prune
+--- @description Forgets the write tracking of characters nobody is playing.
 local function prune()
 	for citizenId in pairs(lastWritten) do
 		if not OPX.PlayerRegistry.byCitizenId[citizenId] then
@@ -109,13 +121,15 @@ local function prune()
 	end
 end
 
+--- @author DemiAutomatic
+--- @type {integer|nil}
+--- @description When the next autosave, paycheck and prune are due.
 local nextSaveAt, nextPaycheckAt, nextPruneAt
 
---- One pass of the background loop. Every job is wrapped on its own, so one failing job does
---- not skip the others, and the whole pass is wrapped again by its caller.
+--- @author DemiAutomatic
+--- @method tick
+--- @description Runs one pass: sampling, autosave, paychecks and pruning.
 local function tick()
-	-- deliberately `pairs(OPX.Players)` and not `OPX.GetPlayers()`: that walk evicts, and an
-	-- eviction here would put a database write inside a 1 Hz loop
 	local sampled, sampleError = pcall(function()
 		for _, player in pairs(OPX.Players) do
 			OPX.SamplePosition(player)
@@ -128,7 +142,6 @@ local function tick()
 	local now = OPX.Now()
 
 	if now >= nextSaveAt then
-		-- re-read every interval: a live tunable captured in a local freezes at load
 		nextSaveAt = now + OPX.TuneNumber('AUTOSAVE_SECONDS', 30) * 1000
 		local ok, err = pcall(autosave)
 		if not ok then Open77.log.error('[loops] autosave raised: ' .. tostring(err)) end
@@ -156,16 +169,16 @@ CreateThread(function()
 		Wait(SAMPLE_MS)
 
 		if not OPX.BootError then
-			-- the whole pass, not only its jobs: `OPX.Now` and `OPX.TuneNumber` are host reads too,
-			-- and a raise from one of them would end autosaving for the session
 			local ok, err = pcall(tick)
 			if not ok then Open77.log.error('[loops] the background pass raised: ' .. tostring(err)) end
 		end
 	end
 end)
 
---- A stop is the last chance to write anything. One thread per character, not one loop: a
---- single loop would dispatch the first UPDATE, suspend, and never be resumed.
+--- @author DemiAutomatic
+--- @event onResourceStop
+--- @description Dispatches a best-effort save of every character when the core stops.
+--- @param name {string}
 AddEventHandler('onResourceStop', function(name)
 	if name ~= GetCurrentResourceName() then return end
 	local players = OPX.GetPlayers()

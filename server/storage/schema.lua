@@ -1,6 +1,10 @@
---- Schema migrations, keyed by name and never by position. Every statement here is the one in
---- the matching `sql/` file and the two are edited together -- see README, "The schema".
+--- @author DemiAutomatic
+--- @file server/storage/schema.lua
+--- @description Schema migrations applied at boot, mirrored by the sql files.
 
+--- @author DemiAutomatic
+--- @type {Migration[]}
+--- @description Every migration in order, keyed by its name.
 OPX.Schema = {
 	{
 		name = '0001_users',
@@ -160,8 +164,6 @@ CREATE TABLE IF NOT EXISTS opx77_character_clothing (
 ) ENGINE=InnoDB
       ]],
 		},
-		-- A look is not worth locking every player out for: a failure is logged with this line and
-		-- retried at the next start, and nothing else refuses to boot.
 		optional = 'clothing is neither restored nor saved until it is applied',
 	},
 }

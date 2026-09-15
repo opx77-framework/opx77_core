@@ -1,27 +1,21 @@
---- Schema migrations, keyed by name and never by position. Every statement here is the one in
---- the matching `sql/` file and the two are edited together -- see README, "The schema".
+--- @author DemiAutomatic
+--- @file server/storage/schema.lua
+--- @description Every table the core owns, created at boot, mirrored by sql/schema.sql.
 
+--- @author DemiAutomatic
+--- @type {string[]}
+--- @description One CREATE TABLE IF NOT EXISTS per table, in dependency order.
 OPX.Schema = {
-  {
-    name = "0001_users",
-    file = "sql/users.sql",
-    statements = {
-      [[
+	[[
 CREATE TABLE IF NOT EXISTS opx77_users (
     user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
     display_name VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB
-      ]],
-    },
-  },
+]],
 
-  {
-    name = "0002_characters",
-    file = "sql/characters.sql",
-    statements = {
-      [[
+	[[
 CREATE TABLE IF NOT EXISTS opx77_characters (
     citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
     user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -43,15 +37,9 @@ CREATE TABLE IF NOT EXISTS opx77_characters (
         FOREIGN KEY (user_id) REFERENCES opx77_users (user_id)
         ON DELETE CASCADE
 ) ENGINE=InnoDB
-      ]],
-    },
-  },
+]],
 
-  {
-    name = "0003_character_groups",
-    file = "sql/character_groups.sql",
-    statements = {
-      [[
+	[[
 CREATE TABLE IF NOT EXISTS opx77_character_groups (
     citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     group_type ENUM('job', 'gang') NOT NULL,
@@ -64,15 +52,20 @@ CREATE TABLE IF NOT EXISTS opx77_character_groups (
         FOREIGN KEY (citizen_id) REFERENCES opx77_characters (citizen_id)
         ON DELETE CASCADE
 ) ENGINE=InnoDB
-      ]],
-    },
-  },
+]],
 
-  {
-    name = "0004_vehicles",
-    file = "sql/vehicles.sql",
-    statements = {
-      [[
+	[[
+CREATE TABLE IF NOT EXISTS opx77_character_clothing (
+    citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
+    clothing JSON NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_opx77_character_clothing_character
+        FOREIGN KEY (citizen_id) REFERENCES opx77_characters (citizen_id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB
+]],
+
+	[[
 CREATE TABLE IF NOT EXISTS opx77_vehicles (
     plate VARCHAR(12) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
     citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -91,7 +84,43 @@ CREATE TABLE IF NOT EXISTS opx77_vehicles (
         FOREIGN KEY (citizen_id) REFERENCES opx77_characters (citizen_id)
         ON DELETE CASCADE
 ) ENGINE=InnoDB
-      ]],
-    },
-  },
+]],
+
+	[[
+CREATE TABLE IF NOT EXISTS opx77_inventories (
+    id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    kind VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    owner VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NULL DEFAULT NULL,
+    plate VARCHAR(12) CHARACTER SET ascii COLLATE ascii_bin NULL DEFAULT NULL,
+    slots SMALLINT UNSIGNED NOT NULL,
+    max_weight INT UNSIGNED NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_opx77_inventories_identity (kind, owner),
+    KEY idx_opx77_inventories_citizen (citizen_id),
+    KEY idx_opx77_inventories_plate (plate),
+    CONSTRAINT fk_opx77_inventory_character
+        FOREIGN KEY (citizen_id) REFERENCES opx77_characters (citizen_id)
+        ON DELETE CASCADE,
+    CONSTRAINT fk_opx77_inventory_vehicle
+        FOREIGN KEY (plate) REFERENCES opx77_vehicles (plate)
+        ON DELETE CASCADE
+) ENGINE=InnoDB
+]],
+
+	[[
+CREATE TABLE IF NOT EXISTS opx77_inventory_items (
+    inventory_id INT UNSIGNED NOT NULL,
+    slot SMALLINT UNSIGNED NOT NULL,
+    name VARCHAR(48) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    quantity INT UNSIGNED NOT NULL,
+    metadata JSON NULL DEFAULT NULL,
+    PRIMARY KEY (inventory_id, slot),
+    KEY idx_opx77_inventory_items_name (name),
+    CONSTRAINT fk_opx77_inventory_item_inventory
+        FOREIGN KEY (inventory_id) REFERENCES opx77_inventories (id)
+        ON DELETE CASCADE
+) ENGINE=InnoDB
+]],
 }

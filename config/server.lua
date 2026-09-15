@@ -1,62 +1,112 @@
--- Server-only: nothing here is ever distributed to a client. Numbers an operator may change
--- at runtime are re-declared as tunables in server/tunables.lua, defaulting to these.
+--- @author DemiAutomatic
+--- @file config/server.lua
+--- @description Server-only configuration, never distributed to a client.
+--- @field AUTOSAVE_SECONDS {integer} How often a loaded character is written back.
+--- @field MONEY {table} Negative balances and paychecks.
+--- @field MONEY.ALLOW_NEGATIVE {table<string, boolean>} Money types that may go below zero.
+--- @field MONEY.ALLOW_NEGATIVE.BANK {boolean}
+--- @field MONEY.PAYCHECK_MINUTES {integer} Minutes between paychecks; 0 disables them.
+--- @field MONEY.PAYCHECK_REQUIRES_DUTY {boolean} Pay only a player who is on duty.
+--- @field MONEY.PAYCHECK_TYPE {string} Money type a salary lands in; unknown falls back to SHARED.MONEY.DEFAULT.
+--- @field CHARACTERS {table} Slots, row ceiling and extra cascades.
+--- @field CHARACTERS.DEFAULT_SLOTS {integer} How many characters one account may hold.
+--- @field CHARACTERS.SLOTS_BY_USER {table<string, integer>} Per-account slot overrides, keyed by userId.
+--- @field CHARACTERS.ROW_CEILING {integer} Lifetime character rows per account; keep well above DEFAULT_SLOTS.
+--- @field CHARACTERS.CASCADE_TABLES {table[]} Extra { TABLE, COLUMN } pairs deleted with a character.
+--- @field ENTRY {table} The readiness gate and the selection bucket.
+--- @field ENTRY.GATE_MS {integer} Liveness interval declared to the gate, clamped 1000..600000.
+--- @field ENTRY.PIPELINE_MS {integer} Selection deadline, below GATE_MS; ceiling of SELECTION_MS.
+--- @field ENTRY.BUCKET {table} The routing bucket a player without a character waits in.
+--- @field ENTRY.BUCKET.ISOLATE {boolean} One bucket per player; false moves nobody.
+--- @field ENTRY.BUCKET.BASE {integer} A player's bucket is BASE plus their id, up to BASE+65535.
+--- @field ENTRY.BUCKET.WORLD {integer} The shared world bucket characters are placed in.
+--- @field ENTRY.BUCKET.POPULATION {boolean} Ambient population in a selection bucket.
+--- @field ENTRY.BUCKET.LOCKDOWN {string|false} inactive, relaxed, strict or full; false leaves it alone.
+--- @field PLAYER {table} Starting metadata and default groups.
+--- @field PLAYER.STARTING_METADATA {table} Initial metadata; the core reads health, armor, isDead, inLastStand.
+--- @field PLAYER.DEFAULT_JOB {string} Must exist in data/jobs.lua.
+--- @field PLAYER.DEFAULT_GANG {string} Must exist in data/gangs.lua.
+--- @field CONFLICTING_PLACERS {string[]} Resources that also place players, warned about at boot.
+--- @field EXPORTS {table} Who may call the server exports.
+--- @field EXPORTS.READ {string|table<string, boolean>} "*" for every server resource, or a set of names.
+--- @field EXPORTS.CALLERS {table<string, table>} Resources granted scopes for the write exports.
+--- @field EXPORTS.MAX_RESULT_BYTES {integer} Heaviest encoded answer, in bytes, under the host's 48 KiB.
+--- @field INVENTORY {table} Bounds on what the inventory storage exports accept.
+--- @field INVENTORY.MAX_SLOTS {integer} Slots one container may have.
+--- @field INVENTORY.MAX_WEIGHT {integer} Grams; the column is INT UNSIGNED.
+--- @field INVENTORY.MAX_METADATA_BYTES {integer} One stack's encoded metadata, in bytes.
+--- @field INVENTORY.PAGE_ROWS {integer} Stacks one read answers at most.
+--- @field INVENTORY.LINKED_KINDS {table<string, string>} Kinds owned by a citizen id or a plate.
 
 OPX.Config.SERVER = {
-  AUTOSAVE_SECONDS = 300, -- how often a loaded player is written back; bounds what a crash costs
+	AUTOSAVE_SECONDS = 300,
 
-  MONEY = {
-    -- money types that may go below zero; a type not listed has the removal refused rather
-    -- than truncated
-    ALLOW_NEGATIVE = { BANK = true },
+	MONEY = {
+		ALLOW_NEGATIVE = { BANK = true },
 
-    PAYCHECK_MINUTES = 10, -- minutes between paychecks; zero disables them entirely
-    PAYCHECK_REQUIRES_DUTY = true, -- only pay a player who is on duty
+		PAYCHECK_MINUTES = 10,
+		PAYCHECK_REQUIRES_DUTY = true,
 
-    -- which of SHARED.MONEY.TYPES a salary lands in, and the type its toast names; an
-    -- unknown name falls back to SHARED.MONEY.DEFAULT with a warning at boot
-    PAYCHECK_TYPE = "BANK",
-  },
+		PAYCHECK_TYPE = 'BANK',
+	},
 
-  CHARACTERS = {
-    DEFAULT_SLOTS = 3, -- how many characters one account may hold
+	CHARACTERS = {
+		DEFAULT_SLOTS = 3,
 
-    -- per-account overrides, keyed by durable userId. `opx77.whois` prints a player's.
-    SLOTS_BY_USER = {},
+		SLOTS_BY_USER = {},
 
-    -- the most rows one account may ever write to `opx77_characters`. A lifetime ceiling,
-    -- not a roster size, because a delete is soft: keep it well above DEFAULT_SLOTS.
-    ROW_CEILING = 60,
+		ROW_CEILING = 60,
 
-    -- extra tables whose rows go with a character, as `{ TABLE, COLUMN }` pairs matched on
-    -- the citizen id. The core's own tables use ON DELETE CASCADE and are not listed.
-    CASCADE_TABLES = {},
-  },
+		CASCADE_TABLES = {},
+	},
 
-  ENTRY = {
-    -- the liveness interval declared to `Open77.ready.participate`, in ms, clamped by the
-    -- host to [1000, 600000]. Not a budget for the player -- see README, "The entry gate".
-    GATE_MS = 300000,
+	ENTRY = {
+		GATE_MS = 300000,
 
-    -- the core's own deadline for the whole join sequence, in ms. Below GATE_MS so the core
-    -- gives up first and can say why. Also the ceiling of the SELECTION_MS tunable.
-    PIPELINE_MS = 240000,
-  },
+		PIPELINE_MS = 240000,
 
-  PLAYER = {
-    -- The initial `PlayerData.metadata`, and the four keys the core itself reads. A gameplay
-    -- file's own keys merge on top and survive every save; the needs belong to opx77_status.
-    STARTING_METADATA = {
-      health = 100,
-      armor = 0,
-      isDead = false,
-      inLastStand = false,
-    },
+		BUCKET = {
+			ISOLATE = true,
 
-    DEFAULT_JOB = "unemployed", -- must exist in data/jobs.lua
-    DEFAULT_GANG = "none", -- must exist in data/gangs.lua
-  },
+			BASE = 77000,
 
-  -- resources that would fight the core over where a player stands. The core disables
-  -- nothing; it prints once what to do about each. See README, "Placement conflicts".
-  CONFLICTING_PLACERS = { "open77_playerstate", "freeroam", "pursuit", "race" },
+			WORLD = 0,
+
+			POPULATION = false,
+			LOCKDOWN = 'relaxed',
+		},
+	},
+
+	PLAYER = {
+		STARTING_METADATA = {
+			health = 100,
+			armor = 0,
+			isDead = false,
+			inLastStand = false,
+		},
+
+		DEFAULT_JOB = 'unemployed',
+		DEFAULT_GANG = 'none',
+	},
+
+	CONFLICTING_PLACERS = { 'open77_playerstate', 'freeroam', 'pursuit', 'race' },
+
+	EXPORTS = {
+		READ = '*',
+
+		CALLERS = {
+			opx77_inventory = { scopes = { inventory = true } },
+		},
+
+		MAX_RESULT_BYTES = 32768,
+	},
+
+	INVENTORY = {
+		MAX_SLOTS = 1000,
+		MAX_WEIGHT = 4000000000,
+		MAX_METADATA_BYTES = 4096,
+		PAGE_ROWS = 64,
+
+		LINKED_KINDS = { character = 'citizen', trunk = 'plate', glovebox = 'plate' },
+	},
 }

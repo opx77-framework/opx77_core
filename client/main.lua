@@ -1,37 +1,46 @@
---- Client state: presentation and intent only. Anything reported from here is a hint the
---- server re-derives.
+--- @author DemiAutomatic
+--- @file client/main.lua
+--- @description Client mirror of the server's state, and the announce to it.
 
---- The server's copy, mirrored. Empty until a character is loaded. Nothing captures this into
---- a local: a handler replaces the table wholesale on login.
----@type PlayerData|table
+--- @author DemiAutomatic
+--- @type {PlayerData|table}
+--- @description The server's PlayerData, mirrored; empty until a character loads.
 OPX.PlayerData = {}
 
---- The selection roster: what the server last sent.
+--- @author DemiAutomatic
+--- @type {table}
+--- @description The roster the server last sent: list, slots and origins.
 OPX.Characters = {
-  ---@type CharacterSummary[]
-  list = {},
-  ---@type integer
-  slots = 0,
-  ---@type table<string, table>
-  origins = {},
+	list = {},
+	slots = 0,
+	origins = {},
 }
 
---- True between `playerLoaded` and `playerUnloaded`.
+--- @author DemiAutomatic
+--- @type {boolean}
+--- @description True between playerLoaded and playerUnloaded.
 OPX.IsLoggedIn = false
 
---- Announces this client to the server, which is what makes a core reload survivable: the
---- server's roster is empty and `onPlayerConnected` does not re-fire.
+--- @author DemiAutomatic
+--- @method OPX.Announce
+--- @description Announces this client to the server so it resends the roster.
 function OPX.Announce()
-  TriggerServerEvent(OPX.Events.Server.READY)
+	TriggerServerEvent(OPX.Events.Server.READY)
 end
 
+--- @author DemiAutomatic
+--- @event onClientResourceStart
+--- @description Announces the client once the core's client half has started.
+--- @param name {string}
 AddEventHandler(OPX.Events.Platform.RESOURCE_START, function(name)
-  if name ~= GetCurrentResourceName() then return end
-  Open77.log.info(("[client] opx77_core %s client ready"):format(OPX.VERSION))
-  OPX.Announce()
+	if name ~= GetCurrentResourceName() then return end
+	Open77.log.info(('[client] opx77_core %s client ready'):format(OPX.VERSION))
+	OPX.Announce()
 end)
 
+--- @author DemiAutomatic
+--- @event open77:worldReady
+--- @description Announces the client again once the world is up.
 AddEventHandler(OPX.Events.Platform.WORLD_READY, function()
-  -- announced again: a client can start before the world is up, and the server throttles this
-  OPX.Announce()
+	OPX.Announce()
 end)

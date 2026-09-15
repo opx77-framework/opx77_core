@@ -1,181 +1,218 @@
---- The player audit log: what an operator will be asked to account for later, as opposed to
---- `Open77.log`, which is for what the code is doing. The platform log is the only sink.
+--- @author DemiAutomatic
+--- @file server/logger.lua
+--- @description The player audit log, written as greppable platform log lines.
 
-local Logger = {}
+OPX.Logger = {}
+local Logger = OPX.Logger
 
+--- @author DemiAutomatic
+--- @type {table<string, boolean>}
+--- @description The severities an entry may carry; anything else reads info.
 local SEVERITIES = { debug = true, info = true, warn = true, error = true }
 
----@class LogEntry
----@field event string      stable and greppable: "money.remove", "character.delete"
----@field severity string|nil
----@field message string|nil
----@field source integer|nil
----@field citizenId string|nil
----@field userId string|nil
----@field data table|nil
-
---- What one entry may carry, in characters. Everything here can come from a client.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Longest message or data text one entry carries, in characters.
 local MAX_MESSAGE = 200
 
---- Window in which repeated identical entries are collapsed, so a client looping a refusal
---- costs one line and a number instead of a screenful.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description Window in which repeated identical entries are collapsed.
 local DEDUPE_MS = 10000
 
---- How long a closed window is kept, so the next entry of its kind can say how many it
---- stands for.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description How long a closed window is kept to report its count.
 local RETAIN_MS = DEDUPE_MS * 6
 
---- key -> { at, count, owner }. `owner` is kept beside the key rather than parsed back out of
---- it, because a key ends in the source OR the citizen id.
+--- @author DemiAutomatic
+--- @type {table<string, table>}
+--- @description Recent entries by key, with their time, count and owner.
 local recent = {}
 
---- Event prefixes that are never collapsed: six purchases in eight seconds are six answers.
---- Refusals under the same prefixes still are, through `severity`.
-local LEDGER_PREFIXES = { "money.", "character." }
+--- @author DemiAutomatic
+--- @type {string[]}
+--- @description Event prefixes whose info entries are never collapsed.
+local LEDGER_PREFIXES = { 'money.', 'character.' }
 
----@param value any
----@param maximum integer
----@return string
+--- @author DemiAutomatic
+--- @method span
+--- @description Byte length of the first characters, bounded at four bytes each.
+--- @param text {string}
+--- @param maximum {integer} Characters to keep.
+--- @returns {integer}
+local function span(text, maximum)
+	local size = math.min(#text, maximum * 4)
+	local characters = 0
+	for index = 1, size do
+		local byte = text:byte(index)
+		if byte < 0x80 or byte > 0xBF then
+			if characters >= maximum then return index - 1 end
+			characters = characters + 1
+		end
+	end
+	return size
+end
+
+--- @author DemiAutomatic
+--- @method bounded
+--- @description Turns a value into text without control characters, truncated.
+--- @param value {any}
+--- @param maximum {integer} Characters to keep.
+--- @returns {string}
 local function bounded(value, maximum)
-  local text = tostring(value or "")
-  text = text:gsub("[%c]", " ")
-  if #text > maximum then text = text:sub(1, maximum) .. "..." end
-  return text
+	local text = tostring(value or '')
+	text = text:gsub('[%c]', ' ')
+	local cut = span(text, maximum)
+	if cut < #text then text = text:sub(1, cut) .. '...' end
+	return text
 end
 
---- Truncates and strips control characters. Published because a newline in client-chosen
---- text forges a whole log line attributed to whatever resource the attacker names.
----@param value any
----@param maximum? integer
----@return string
-function Logger.safe(value, maximum)
-  return bounded(value, maximum or 64)
+--- @author DemiAutomatic
+--- @method OPX.Logger.safe
+--- @description Truncates a value and strips its control characters for logging.
+--- @param value {any}
+--- @param maximum {integer|nil}
+--- @returns {string}
+function OPX.Logger.safe(value, maximum)
+	return bounded(value, maximum or 64)
 end
 
---- One line, same shape every time, so a grep over the platform log finds them.
----@param entry LogEntry
----@return string
+--- @author DemiAutomatic
+--- @method toLine
+--- @description Formats an entry as one key=value audit line.
+--- @param entry {LogEntry}
+--- @returns {string}
 local function toLine(entry)
-  local parts = {
-    ("event=%s"):format(entry.event),
-    ("severity=%s"):format(entry.severity),
-  }
-  if entry.citizenId then parts[#parts + 1] = ("citizen=%s"):format(entry.citizenId) end
-  if entry.userId then parts[#parts + 1] = ("user=%s"):format(entry.userId) end
-  if entry.source then parts[#parts + 1] = ("player=%d"):format(entry.source) end
-  if entry.message and entry.message ~= "" then
-    parts[#parts + 1] = ("message=%q"):format(entry.message)
-  end
-  if entry.data then
-    parts[#parts + 1] = ("data=%s"):format(bounded(json.encode(entry.data), MAX_MESSAGE))
-  end
-  return table.concat(parts, " ")
+	local parts = {
+		('event=%s'):format(entry.event),
+		('severity=%s'):format(entry.severity),
+	}
+	if entry.citizenId then parts[#parts + 1] = ('citizen=%s'):format(entry.citizenId) end
+	if entry.userId then parts[#parts + 1] = ('user=%s'):format(entry.userId) end
+	if entry.source then parts[#parts + 1] = ('player=%d'):format(entry.source) end
+	if entry.message and entry.message ~= '' then
+		parts[#parts + 1] = ('message=%q'):format(entry.message)
+	end
+	if entry.data then
+		parts[#parts + 1] = ('data=%s'):format(bounded(json.encode(entry.data), MAX_MESSAGE))
+	end
+	return table.concat(parts, ' ')
 end
 
---- True for an entry that has to be written out in full every time it happens.
----@param entry LogEntry
----@return boolean
+--- @author DemiAutomatic
+--- @method isLedger
+--- @description Answers whether an entry must be written every time.
+--- @param entry {LogEntry}
+--- @returns {boolean}
 local function isLedger(entry)
-  -- `Logger.security` is the only producer of `warn`, and a refusal is not a ledger line
-  if entry.severity ~= "info" and entry.severity ~= "debug" then return false end
-  for i = 1, #LEDGER_PREFIXES do
-    local prefix = LEDGER_PREFIXES[i]
-    if entry.event:sub(1, #prefix) == prefix then return true end
-  end
-  return false
+	if entry.severity ~= 'info' and entry.severity ~= 'debug' then return false end
+	for i = 1, #LEDGER_PREFIXES do
+		local prefix = LEDGER_PREFIXES[i]
+		if entry.event:sub(1, #prefix) == prefix then return true end
+	end
+	return false
 end
 
---- When it was last worth walking `recent`: sweeping per entry is a full table scan per log
---- line.
+--- @author DemiAutomatic
+--- @type {integer}
+--- @description When the recent entries may next be swept.
 local nextSweepAt = 0
 
---- Drops entries nobody will read again. This, not `Logger.forget`, is what bounds the table.
----@param now integer
+--- @author DemiAutomatic
+--- @method sweep
+--- @description Drops recent entries past their retention, at most once a window.
+--- @param now {integer}
 local function sweep(now)
-  if now < nextSweepAt then return end
-  nextSweepAt = now + DEDUPE_MS
-  -- assigning nil to a key `pairs` has already handed out is defined; adding one is not
-  for key, seen in pairs(recent) do
-    if now - seen.at >= RETAIN_MS then recent[key] = nil end
-  end
+	if now < nextSweepAt then return end
+	nextSweepAt = now + DEDUPE_MS
+	for key, seen in pairs(recent) do
+		if now - seen.at >= RETAIN_MS then recent[key] = nil end
+	end
 end
 
---- True when this exact entry was written within DEDUPE_MS. Counts it either way, so the
---- first entry after the window reports how many it stands for.
----@param key string
----@param owner string
----@return boolean repeated, integer carried
+--- @author DemiAutomatic
+--- @method repeated
+--- @description Counts an entry and answers whether its window is still open.
+--- @param key {string}
+--- @param owner {string}
+--- @returns {boolean, integer}
 local function repeated(key, owner)
-  local now = OPX.Now()
-  sweep(now)
-  local seen = recent[key]
-  if seen and now - seen.at < DEDUPE_MS then
-    seen.count = seen.count + 1
-    return true, seen.count
-  end
-  local carried = seen and seen.count or 0
-  recent[key] = { at = now, count = 0, owner = owner }
-  return false, carried
+	local now = OPX.Now()
+	sweep(now)
+	local seen = recent[key]
+	if seen and now - seen.at < DEDUPE_MS then
+		seen.count = seen.count + 1
+		return true, seen.count
+	end
+	local carried = seen and seen.count or 0
+	recent[key] = { at = now, count = 0, owner = owner }
+	return false, carried
 end
 
---- Dropped on departure, so a source that never returns does not hold a key forever.
----@param source Source
----@param citizenId? CitizenId pass it when the caller has one: an entry logged without a
----        source is keyed by citizen id, which a departing source does not name
-function Logger.forget(source, citizenId)
-  local bySource = tostring(source)
-  local byCitizen = citizenId ~= nil and tostring(citizenId) or nil
-  for key, seen in pairs(recent) do
-    if seen.owner == bySource or (byCitizen and seen.owner == byCitizen) then
-      recent[key] = nil
-    end
-  end
+--- @author DemiAutomatic
+--- @method OPX.Logger.forget
+--- @description Forgets the dedupe windows a departing player or character owns.
+--- @param source {Source}
+--- @param citizenId {CitizenId|nil}
+function OPX.Logger.forget(source, citizenId)
+	local bySource = tostring(source)
+	local byCitizen = citizenId ~= nil and tostring(citizenId) or nil
+	for key, seen in pairs(recent) do
+		if seen.owner == bySource or (byCitizen and seen.owner == byCitizen) then
+			recent[key] = nil
+		end
+	end
 end
 
----@param entry LogEntry
-function Logger.log(entry)
-  if type(entry) ~= "table" or type(entry.event) ~= "string" then return end
-  entry.severity = SEVERITIES[entry.severity] and entry.severity or "info"
-  entry.message = entry.message ~= nil and bounded(entry.message, MAX_MESSAGE) or nil
+--- @author DemiAutomatic
+--- @method OPX.Logger.log
+--- @description Writes one audit entry, collapsing repeats outside the ledger.
+--- @param entry {LogEntry}
+function OPX.Logger.log(entry)
+	if type(entry) ~= 'table' or type(entry.event) ~= 'string' then return end
+	entry.severity = SEVERITIES[entry.severity] and entry.severity or 'info'
+	entry.message = entry.message ~= nil and bounded(entry.message, MAX_MESSAGE) or nil
 
-  -- a ledger event skips the window entirely: collapsing it destroys the record
-  if not isLedger(entry) then
-    local owner = tostring(entry.source or entry.citizenId or "-")
-    local again, carried = repeated(entry.event .. "\1" .. owner, owner)
-    if again then return end
-    if carried > 0 then
-      entry.message = ("%s [+%d suppressed]"):format(entry.message or "", carried)
-    end
-  end
+	if not isLedger(entry) then
+		local owner = tostring(entry.source or entry.citizenId or '-')
+		local again, carried = repeated(entry.event .. '\1' .. owner, owner)
+		if again then return end
+		if carried > 0 then
+			entry.message = ('%s [+%d suppressed]'):format(entry.message or '', carried)
+		end
+	end
 
-  Open77.log[entry.severity](("[audit] %s"):format(toLine(entry)))
+	Open77.log[entry.severity](('[audit] %s'):format(toLine(entry)))
 end
 
---- The two shapes that come up constantly, so call sites do not rebuild them.
----@param player Player|nil
----@param event string
----@param message? string
----@param data? table
-function Logger.player(player, event, message, data)
-  local playerData = player and player.PlayerData
-  Logger.log({
-    event = event,
-    message = message,
-    data = data,
-    source = playerData and playerData.source,
-    citizenId = playerData and playerData.citizenId,
-    userId = playerData and playerData.userId,
-  })
+--- @author DemiAutomatic
+--- @method OPX.Logger.player
+--- @description Writes an audit entry attributed to a loaded character.
+--- @param player {Player|nil}
+--- @param event {string}
+--- @param message {string|nil}
+--- @param data {table|nil}
+function OPX.Logger.player(player, event, message, data)
+	local playerData = player and player.PlayerData
+	Logger.log({
+		event = event,
+		message = message,
+		data = data,
+		source = playerData and playerData.source,
+		citizenId = playerData and playerData.citizenId,
+		userId = playerData and playerData.userId,
+	})
 end
 
----@param event string
----@param message? string
----@param data? table
----@param source? Source who caused it: without one the dedupe key is global per event, and
----        one player looping a refusal swallows every other player's
-function Logger.security(event, message, data, source)
-  Logger.log({ event = event, severity = "warn", message = message, data = data,
-               source = source })
+--- @author DemiAutomatic
+--- @method OPX.Logger.security
+--- @description Writes a warn audit entry for a refused or suspicious request.
+--- @param event {string}
+--- @param message {string|nil}
+--- @param data {table|nil}
+--- @param source {Source|nil} Who caused it, keying the dedupe window.
+function OPX.Logger.security(event, message, data, source)
+	Logger.log({ event = event, severity = 'warn', message = message, data = data,
+		source = source })
 end
-
-OPX.Logger = Logger

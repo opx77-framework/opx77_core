@@ -1,18 +1,24 @@
---- Success or failure as a value, so `nil` never means both "failed" and "found nothing".
+--- @author DemiAutomatic
+--- @file shared/result.lua
+--- @description Success or failure as a value, never an ambiguous nil.
 
-local Result = {}
+OPX.Result = {}
 
----@param value any
----@return Result
-function Result.ok(value)
-  return { ok = true, value = value }
+--- @author DemiAutomatic
+--- @method OPX.Result.ok
+--- @description Wraps a success; its value may be nil.
+--- @param value {any}
+--- @returns {Result}
+function OPX.Result.ok(value)
+	return { ok = true, value = value }
 end
 
----@param code string stable, meant to be branched on
----@param detail? string for logs and staff only: it can carry a raw database exception
----@return Result
-function Result.err(code, detail)
-  return { ok = false, error = code, detail = detail }
+--- @author DemiAutomatic
+--- @method OPX.Result.err
+--- @description Wraps a failure with a stable code and a log-only detail.
+--- @param code {string}
+--- @param detail {string|nil}
+--- @returns {Result}
+function OPX.Result.err(code, detail)
+	return { ok = false, error = code, detail = detail }
 end
-
-OPX.Result = Result

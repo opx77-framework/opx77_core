@@ -1,8 +1,8 @@
--- Client-only, so nothing here is authoritative: a modified client can change any of it and
--- the server re-derives anything that matters.
+--- @author DemiAutomatic
+--- @file config/client.lua
+--- @description Client-only cadences; nothing here is authoritative.
+--- @field POSITION_REPORT_MS {integer} Milliseconds between two heading reports to the server.
 
 OPX.Config.CLIENT = {
-  -- how often the client reports its position for the autosave, in ms. The server re-reads
-  -- the authoritative position before writing, so this only decides how fresh the hint is.
-  POSITION_REPORT_MS = 5000,
+	POSITION_REPORT_MS = 5000,
 }

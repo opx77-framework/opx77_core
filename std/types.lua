@@ -46,6 +46,7 @@
 ---@field position Position|nil    nil until the character has been somewhere
 ---@field metadata PlayerMetadata
 ---@field appearance AppearanceSnapshot|nil  nil until a face has been captured
+---@field clothing ClothingRecord|false|nil  false when none is stored, nil when it was not read
 ---@field lastLoggedOut string|nil
 ---@field reportedHeading number|nil  the client's hint, never authoritative
 
@@ -80,7 +81,25 @@
 ---@field value integer the chosen index, 0 to 511 and below `choices` when that is non-zero
 ---@field choices integer  how many the catalogue offers, 0 to 512
 
+--- What a character wears, `opx77_character_clothing.clothing`. Canonical form only:
+--- server/clothing.lua refuses anything else. The platform's own record shape.
+---@class ClothingRecord
+---@field schemaVersion integer  1
+---@field equipment table<ClothingSlot, string|false>  all nine slots: a record name, or false
+---@field wardrobe ClothingWardrobe
+
+---@class ClothingWardrobe
+---@field active integer|nil  the outfit shown, 0 to 6; nil for the worn set
+---@field outfits table<string, table<ClothingSlot, string|false>>  "0" to "6", never empty:
+---        a record overrides the slot, false hides it, and an absent slot shows what is worn.
+---        Underwear is never overridden
+
+---@alias ClothingSlot "Head"|"Face"|"InnerChest"|"OuterChest"|"Legs"|"Feet"|"Outfit"
+---| "UnderwearTop"|"UnderwearBottom"
+
 --- x, y and z come from `Open77.players.position`; `heading` is the one client-supplied field.
+--- A `bucket` in the selection range is never placed into: `OPX.Buckets.placementOf` reads it
+--- as `ENTRY.BUCKET.WORLD`.
 ---@class Position
 ---@field x number
 ---@field y number
@@ -142,6 +161,7 @@
 ---@field citizenId CitizenId|nil set once a character is loaded
 ---@field charactersSent boolean
 ---@field released boolean|nil
+---@field departing boolean|nil   set on disconnect or eviction, so the slot is moved no more
 
 --- The trimmed shape sent to a client for the selection screen. Money, metadata, appearance
 --- and stored position are deliberately absent.
@@ -178,13 +198,6 @@
 ---@field isBoss boolean|nil
 ---@field bankAuth boolean|nil
 
---- One schema migration. Append-only: the runner keys on the name, and an entry that has
---- shipped has already run on live databases.
----@class Migration
----@field name string
----@field file string       the `sql/` file carrying the same statements, for an operator
----@field statements string[]
-
 --- Returning false from a hook vetoes the operation; returning nothing allows it. Points the
 --- core triggers: money:beforeAdd, money:beforeRemove, money:beforeSet, paycheck:before.
 ---@class HookPayload
@@ -192,3 +205,45 @@
 ---@field moneyType MoneyType|nil
 ---@field amount number|nil
 ---@field reason string|nil
+
+--- One stored stack, as the inventory storage exports hand it over and take it back.
+---@class InventoryStack
+---@field slot integer          1-based
+---@field name string           an item name of opx77_inventory's catalogue
+---@field count integer         at least 1
+---@field metadata table|nil    what makes this copy unlike another; nil for an ordinary one
+
+--- A container as the storage creates it.
+---@class InventoryEntity
+---@field kind string
+---@field owner string
+---@field citizenId string|nil   set for a character's bag
+---@field plate string|nil       set for a vehicle's trunk or glovebox
+---@field slots integer
+---@field maxWeight integer     grams
+
+--- A container row, as `InventoryEnsure` and the first page of `InventoryRead` answer it.
+---@class InventoryHeader
+---@field id integer
+---@field kind string           "character", "stash", "trunk", "glovebox", or another
+---@field owner string          the citizen id, the stash name, or the plate
+---@field slots integer         the size it was created with
+---@field maxWeight integer     grams
+
+--- One entry of the change cursor `GetChanges` reads.
+---@class CoreChange
+---@field cursor integer
+---@field kind "loaded"|"unloaded"|"deleted"
+---@field source Source|nil
+---@field citizenId CitizenId|nil
+---@field at integer            the core's clock, milliseconds
+
+--- One audit log entry, the argument of OPX.Logger.log.
+---@class LogEntry
+---@field event string      stable and greppable: "money.remove", "character.delete"
+---@field severity string|nil
+---@field message string|nil
+---@field source integer|nil
+---@field citizenId string|nil
+---@field userId string|nil
+---@field data table|nil

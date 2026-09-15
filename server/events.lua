@@ -22,28 +22,19 @@ AddEventHandler(Events.Platform.PLAYER_CONNECTED, function(rawPlayerId, playerNa
 	OPX.Lifecycle.beginEntry(source)
 end)
 
-local forgetThrottle
-
---- @author DemiAutomatic
---- @method departed
---- @description Marks a departing session, logs its character out and forgets it.
---- @param source {integer|string}
-local function departed(source)
-	source = tonumber(source)
-	if not source then return end
-	local session = OPX.Sessions[source]
-	if session then session.departing = true end
-	OPX.Logout(source)
-	OPX.ForgetSession(source)
-	forgetThrottle(source)
-end
-
 --- @author DemiAutomatic
 --- @event onPlayerDisconnected
 --- @description Tears down everything the core holds for a departing player.
 --- @param rawPlayerId {integer|string}
 AddEventHandler('onPlayerDisconnected', function(rawPlayerId)
-	departed(rawPlayerId)
+	local source = tonumber(rawPlayerId)
+	if not source then return end
+	local session = OPX.Sessions[source]
+	if session then session.departing = true end
+	OPX.Logout(source)
+	OPX.ForgetSession(source)
+	OPX.ForgetCooldowns(source)
+	OPX.Logger.forget(source)
 end)
 
 --- @author DemiAutomatic
@@ -68,15 +59,6 @@ AddEventHandler(Events.Platform.PLAYER_READY, function(rawPlayerId, detail)
 		end
 	end
 end)
-
---- @author DemiAutomatic
---- @method forgetThrottle
---- @description Clears the cooldowns and audit dedupe keyed by a departing source.
---- @param source {integer}
-function forgetThrottle(source)
-	OPX.ForgetCooldowns(source)
-	if OPX.Logger and OPX.Logger.forget then OPX.Logger.forget(source) end
-end
 
 --- @author DemiAutomatic
 --- @event opx77:server:ready

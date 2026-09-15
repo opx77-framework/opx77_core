@@ -653,12 +653,11 @@ l'attaquant ; seul `source` ne se falsifie pas.
 - **`onPlayerConnected`** est un événement diffusé par l'hôte : `source` n'y est pas renseigné,
   l'identifiant arrive donc en argument, et sous forme de chaîne. Un identifiant inutilisable
   (non numérique, ou ≤ 0) est journalisé et ignoré.
-- **Le départ** (`departed`, sur `onPlayerDisconnected`) est au mieux : un départ que personne ne
+- **Le départ** (`onPlayerDisconnected`) est au mieux : un départ que personne ne
   signale est couvert par la revérification du `userId` dans `OPX.EnsureSession`, et
   `OPX.Logout` est idempotent. La session est marquée `departing` **avant** la déconnexion du
   personnage : un joueur sur le départ n'est pas remis dans un bucket de sélection, et l'hôte
-  supprime de lui-même le bucket d'un joueur parti. `forgetThrottle` est déclaré en avance
-  (`local forgetThrottle`) parce que `departed`, plus haut, l'appelle ; il vide les cooldowns
+  supprime de lui-même le bucket d'un joueur parti. Le gestionnaire vide ensuite les cooldowns
   (`OPX.ForgetCooldowns`) et la déduplication de l'audit (`OPX.Logger.forget`), toutes deux
   indexées par source, alors qu'une source est recyclée.
 - **`onPlayerReady`** : un `detail` de la forme `liveness_lost:<res>[,<res>...]` veut dire qu'une
@@ -987,8 +986,9 @@ de joueur ou un identifiant citoyen (en jeu seulement).
   `money:beforeSet`) qui peut opposer un veto (`money.vetoed`).
 - `announceMoney` annonce le changement à ses quatre publics : le client propriétaire
   (`MONEY_CHANGE`), les fichiers du core (`Events.Internal.MONEY_CHANGE`), le journal d'audit, et
-  `PlayerData` lui-même. L'événement interne porte la `source` **et** l'identifiant citoyen : hors
-  ligne la source est `nil`, et c'est l'identifiant citoyen qui sert de clé.
+  `PlayerData` lui-même. L'événement interne porte la `source` **et** l'identifiant citoyen. Comme les trois
+  mutateurs refusent un Player hors ligne, le client propriétaire est toujours là pour recevoir
+  `MONEY_CHANGE`.
 - Les réponses `false, <code>` des mutateurs sont des clés de locale nommant le refus.
 
 ## La position
@@ -1343,9 +1343,6 @@ réserve, même source).
   après le démarrage n'est prise en compte qu'au redémarrage du core.
 - `OPX.Storage.Players.toEntity` est publiée mais aucun fichier du core ne la lit par ce chemin
   (à vérifier dans les autres ressources avant de la garder).
-- `announceMoney` teste `player.Offline` avant d'envoyer `MONEY_CHANGE` au client, mais les trois
-  mutateurs d'argent refusent déjà un Player hors ligne (`money.offline`) : la branche ne peut pas
-  être prise.
 - `OPX.GetPlayersByJob` / `OPX.GetPlayersByGang` passent par `OPX.GetPlayers`, qui peut évincer un
   emplacement périmé ; l'éviction ne cède pas la main (la sauvegarde part sur un thread), mais une
   lecture « en mémoire » peut ainsi déclencher une déconnexion.

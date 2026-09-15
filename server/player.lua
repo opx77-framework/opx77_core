@@ -195,10 +195,8 @@ local function announceMoney(player, moneyType, amount, action, reason)
 	local data = player.PlayerData
 	player.Functions.UpdatePlayerData()
 
-	if not player.Offline then
-		TriggerClientEvent(OPX.Events.Client.MONEY_CHANGE, data.source,
-			moneyType, amount, action, data.money[moneyType])
-	end
+	TriggerClientEvent(OPX.Events.Client.MONEY_CHANGE, data.source,
+		moneyType, amount, action, data.money[moneyType])
 
 	TriggerEvent(OPX.Events.Internal.MONEY_CHANGE,
 		data.source, data.citizenId, moneyType, amount, action, reason,

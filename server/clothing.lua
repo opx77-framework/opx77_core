@@ -9,8 +9,8 @@
 
 local Result = OPX.Result
 
-local Clothing = {}
-OPX.Clothing = Clothing
+OPX.Clothing = {}
+local Clothing = OPX.Clothing
 
 --- The schema version written into every stored record.
 Clothing.VERSION = 1
@@ -74,7 +74,7 @@ end
 --- dropped -- or nil and the code saying what was wrong with it.
 ---@param value any
 ---@return ClothingRecord|nil canonical, string|nil error
-function Clothing.canonical(value)
+function OPX.Clothing.canonical(value)
 	if type(value) ~= 'table' then return nil, 'invalid_record' end
 	for key in pairs(value) do
 		if key ~= 'schemaVersion' and key ~= 'equipment' and key ~= 'wardrobe' then
@@ -136,7 +136,7 @@ end
 ---@param left ClothingRecord|false|nil
 ---@param right ClothingRecord|false|nil
 ---@return boolean
-function Clothing.same(left, right)
+function OPX.Clothing.same(left, right)
 	if type(left) ~= 'table' or type(right) ~= 'table' then return false end
 	for index = 1, #SLOTS do
 		local slot = SLOTS[index]
@@ -157,7 +157,7 @@ end
 
 --- Whether the table exists as far as this run knows: its migration was not skipped.
 ---@return boolean
-function Clothing.available()
+function OPX.Clothing.available()
 	return OPX.Storage.skipped[Clothing.MIGRATION] ~= true
 end
 
@@ -178,7 +178,7 @@ end
 --- keeps the stored row away from a client that could not be shown it. Coroutine only.
 ---@param citizenId CitizenId
 ---@return ClothingRecord|false|nil
-function Clothing.load(citizenId)
+function OPX.Clothing.load(citizenId)
 	local fetched = fetch(citizenId)
 	if fetched.ok then return fetched.value end
 	if Clothing.available() then

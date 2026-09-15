@@ -5,8 +5,8 @@
 local Result = OPX.Result
 local Storage = OPX.Storage
 
-local Inventories = {}
-OPX.Storage.Inventories = Inventories
+OPX.Storage.Inventories = {}
+local Inventories = OPX.Storage.Inventories
 
 --- Rows one INSERT carries inside a save. A container's rows go in several statements of the
 --- same transaction past it, which keeps each statement's parameter list short.
@@ -41,7 +41,7 @@ end
 --- stays in the table, and nobody opens it.
 ---@param citizenId CitizenId
 ---@return Result  ok value is a boolean
-function Inventories.characterExists(citizenId)
+function OPX.Storage.Inventories.characterExists(citizenId)
 	local row = Storage.single([[
 SELECT 1 AS found FROM opx77_characters
  WHERE citizen_id = @citizen AND deleted_at IS NULL
@@ -53,7 +53,7 @@ end
 
 ---@param plate string
 ---@return Result  ok value is a boolean
-function Inventories.vehicleExists(plate)
+function OPX.Storage.Inventories.vehicleExists(plate)
 	local row = Storage.single(
 		'SELECT 1 AS found FROM opx77_vehicles WHERE plate = @plate LIMIT 1', { plate = plate })
 	if not row.ok then return row end
@@ -64,7 +64,7 @@ end
 --- creators, not a SELECT beforehand, and the size given is only used by the one that creates.
 ---@param entity InventoryEntity
 ---@return Result  ok value is { header, created }
-function Inventories.ensure(entity)
+function OPX.Storage.Inventories.ensure(entity)
 	local inserted = Storage.update([[
 INSERT IGNORE INTO opx77_inventories (kind, owner, citizen_id, plate, slots, max_weight)
 VALUES (@kind, @owner, NULLIF(@citizen, ''), NULLIF(@plate, ''), @slots, @maxWeight)
@@ -93,7 +93,7 @@ end
 
 ---@param id integer
 ---@return Result  ok value is a header, or nil
-function Inventories.header(id)
+function OPX.Storage.Inventories.header(id)
 	local row = Storage.single([[
 SELECT id, kind, owner, slots, max_weight FROM opx77_inventories
  WHERE id = @id
@@ -109,7 +109,7 @@ end
 ---@param after integer
 ---@param limit integer  a constant of the caller's, formatted into the statement
 ---@return Result  ok value is a list of { slot, name, count, metadata }
-function Inventories.contents(id, after, limit)
+function OPX.Storage.Inventories.contents(id, after, limit)
 	local rows = Storage.query(([[
 SELECT slot, name, quantity, metadata FROM opx77_inventory_items
  WHERE inventory_id = @id AND slot > @after
@@ -138,7 +138,7 @@ end
 --- values before anything is sent.
 ---@param containers { id: integer, rows: InventoryStack[] }[]
 ---@return Result
-function Inventories.save(containers)
+function OPX.Storage.Inventories.save(containers)
 	local statements = {}
 	for c = 1, #containers do
 		local container = containers[c]
@@ -179,7 +179,7 @@ end
 ---@param slots integer
 ---@param maxWeight integer
 ---@return Result
-function Inventories.resize(id, slots, maxWeight)
+function OPX.Storage.Inventories.resize(id, slots, maxWeight)
 	return Storage.execute(
 		'UPDATE opx77_inventories SET slots = @slots, max_weight = @maxWeight WHERE id = @id',
 		{ id = id, slots = slots, maxWeight = maxWeight })
@@ -188,7 +188,7 @@ end
 --- Deletes a container; its stacks go with it by cascade.
 ---@param id integer
 ---@return Result
-function Inventories.delete(id)
+function OPX.Storage.Inventories.delete(id)
 	return Storage.execute('DELETE FROM opx77_inventories WHERE id = @id', { id = id })
 end
 
@@ -196,7 +196,7 @@ end
 ---@param name string
 ---@param limit integer  a constant of the caller's, formatted into the statement
 ---@return Result  ok value is a list of { id, kind, owner, slot, count }
-function Inventories.holders(name, limit)
+function OPX.Storage.Inventories.holders(name, limit)
 	local rows = Storage.query(([[
 SELECT i.id, i.kind, i.owner, it.slot, it.quantity
   FROM opx77_inventory_items it

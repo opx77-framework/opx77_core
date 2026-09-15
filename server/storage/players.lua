@@ -4,7 +4,8 @@
 local Result = OPX.Result
 local Storage = OPX.Storage
 
-local Players = {}
+OPX.Storage.Players = {}
+local Players = OPX.Storage.Players
 
 --- Accepts a string or an already-decoded table, because a bridge build may do either. A
 --- column that fails to decode is absent rather than fatal.
@@ -33,7 +34,7 @@ end
 ---@param userId UserId
 ---@param displayName? string
 ---@return Result
-function Players.upsertAccount(userId, displayName)
+function OPX.Storage.Players.upsertAccount(userId, displayName)
 	return Storage.execute([[
 INSERT INTO opx77_users (user_id, display_name)
 VALUES (@user, @name)
@@ -69,7 +70,7 @@ Players.toEntity = toEntity
 --- sort to the top, where the player is looking.
 ---@param userId UserId
 ---@return Result  ok value is a list of character entities
-function Players.fetchAll(userId)
+function OPX.Storage.Players.fetchAll(userId)
 	local rows = Storage.query([[
 SELECT citizen_id, user_id, cid, name, char_info, money, job, gang,
        position, metadata, appearance, last_logged_out
@@ -88,7 +89,7 @@ end
 --- One character by citizen id, whoever owns it. Ownership is the caller's check.
 ---@param citizenId CitizenId
 ---@return Result
-function Players.fetchOne(citizenId)
+function OPX.Storage.Players.fetchOne(citizenId)
 	local row = Storage.single([[
 SELECT citizen_id, user_id, cid, name, char_info, money, job, gang,
        position, metadata, appearance, last_logged_out
@@ -106,7 +107,7 @@ end
 ---@param userId UserId
 ---@param slots integer
 ---@return Result  err character.limit when the account is full
-function Players.nextCid(userId, slots)
+function OPX.Storage.Players.nextCid(userId, slots)
 	local rows = Storage.query([[
 SELECT cid FROM opx77_characters
  WHERE user_id = @user AND deleted_at IS NULL
@@ -127,7 +128,7 @@ end
 --- SELECT first: two players creating in the same tick would both pass that check.
 ---@param entity table
 ---@return Result
-function Players.insert(entity)
+function OPX.Storage.Players.insert(entity)
 	return Storage.execute([[
 INSERT INTO opx77_characters
     (citizen_id, user_id, cid, name, char_info, money, job, gang, position, metadata)
@@ -153,7 +154,7 @@ end
 ---@param entity table
 ---@param loggedOut? boolean stamps last_logged_out
 ---@return Result
-function Players.save(entity, loggedOut)
+function OPX.Storage.Players.save(entity, loggedOut)
 	return Storage.execute([[
 UPDATE opx77_characters
    SET name = @name,
@@ -185,7 +186,7 @@ end
 ---@param citizenId CitizenId
 ---@param appearance table|nil a canonical snapshot, already validated
 ---@return Result
-function Players.saveAppearance(citizenId, appearance)
+function OPX.Storage.Players.saveAppearance(citizenId, appearance)
 	return Storage.execute([[
 UPDATE opx77_characters
    SET appearance = NULLIF(@appearance, '')
@@ -200,7 +201,7 @@ end
 ---@param citizenId CitizenId
 ---@return Result  ok value is the decoded document, or nil when none is stored; err
 ---        `clothing-unreadable` for a row whose JSON does not decode, which is not "none"
-function Players.fetchClothing(citizenId)
+function OPX.Storage.Players.fetchClothing(citizenId)
 	local row = Storage.single([[
 SELECT clothing FROM opx77_character_clothing
  WHERE citizen_id = @citizen
@@ -217,7 +218,7 @@ end
 ---@param citizenId CitizenId
 ---@param encoded string a canonical record, already validated and encoded
 ---@return Result
-function Players.saveClothing(citizenId, encoded)
+function OPX.Storage.Players.saveClothing(citizenId, encoded)
 	return Storage.execute([[
 INSERT INTO opx77_character_clothing (citizen_id, clothing)
 VALUES (@citizen, @clothing)
@@ -229,7 +230,7 @@ end
 --- core that does not filter `deleted_at`, and what bounds create-delete-create.
 ---@param userId UserId
 ---@return Result  ok value is the count
-function Players.countRows(userId)
+function OPX.Storage.Players.countRows(userId)
 	local row = Storage.single([[
 SELECT COUNT(*) AS total FROM opx77_characters WHERE user_id = @user
   ]], { user = userId })
@@ -241,7 +242,7 @@ end
 --- reissued to a stranger.
 ---@param citizenId CitizenId
 ---@return Result
-function Players.softDelete(citizenId)
+function OPX.Storage.Players.softDelete(citizenId)
 	return Storage.execute([[
 UPDATE opx77_characters SET deleted_at = CURRENT_TIMESTAMP
  WHERE citizen_id = @citizen AND deleted_at IS NULL
@@ -251,7 +252,7 @@ end
 --- Every job and gang a character belongs to, as two `name -> grade` maps.
 ---@param citizenId CitizenId
 ---@return Result  ok value is { jobs = table, gangs = table }
-function Players.fetchGroups(citizenId)
+function OPX.Storage.Players.fetchGroups(citizenId)
 	local rows = Storage.query([[
 SELECT group_type, group_name, grade
   FROM opx77_character_groups
@@ -279,7 +280,7 @@ end
 ---@param groupName string
 ---@param grade integer
 ---@return Result
-function Players.upsertGroup(citizenId, groupType, groupName, grade)
+function OPX.Storage.Players.upsertGroup(citizenId, groupType, groupName, grade)
 	return Storage.execute([[
 INSERT INTO opx77_character_groups (citizen_id, group_type, group_name, grade)
 VALUES (@citizen, @type, @name, @grade)
@@ -291,7 +292,7 @@ end
 ---@param groupType GroupType
 ---@param groupName string
 ---@return Result
-function Players.removeGroup(citizenId, groupType, groupName)
+function OPX.Storage.Players.removeGroup(citizenId, groupType, groupName)
 	return Storage.execute([[
 DELETE FROM opx77_character_groups
  WHERE citizen_id = @citizen AND group_type = @type AND group_name = @name
@@ -303,7 +304,7 @@ end
 ---@param groupType GroupType
 ---@param groupName string
 ---@return Result  ok value is a list of { citizenId, grade, name }
-function Players.membersOf(groupType, groupName)
+function OPX.Storage.Players.membersOf(groupType, groupName)
 	local rows = Storage.query([[
 SELECT g.citizen_id, g.grade, c.name, c.char_info
   FROM opx77_character_groups g
@@ -327,5 +328,3 @@ SELECT g.citizen_id, g.grade, c.name, c.char_info
 	end
 	return Result.ok(out)
 end
-
-OPX.Storage.Players = Players

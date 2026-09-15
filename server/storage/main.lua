@@ -3,7 +3,8 @@
 
 local Result = OPX.Result
 
-local Storage = {}
+OPX.Storage = {}
+local Storage = OPX.Storage
 
 --- nil until probed, then true or false for the rest of the run.
 local ready = nil
@@ -29,40 +30,40 @@ end
 ---@param sql string
 ---@param params? table
 ---@return Result  ok value is a list of rows
-function Storage.query(sql, params) return run('query', sql, params) end
+function OPX.Storage.query(sql, params) return run('query', sql, params) end
 
 ---@param sql string
 ---@param params? table
 ---@return Result  ok value is one row, or nil
-function Storage.single(sql, params) return run('single', sql, params) end
+function OPX.Storage.single(sql, params) return run('single', sql, params) end
 
 ---@param sql string
 ---@param params? table
 ---@return Result  ok value is one column of one row, or nil
-function Storage.scalar(sql, params) return run('scalar', sql, params) end
+function OPX.Storage.scalar(sql, params) return run('scalar', sql, params) end
 
 ---@param sql string
 ---@param params? table
 ---@return Result  ok value is the inserted id
-function Storage.insert(sql, params) return run('insert', sql, params) end
+function OPX.Storage.insert(sql, params) return run('insert', sql, params) end
 
 --- Also the right method for DDL.
 ---@param sql string
 ---@param params? table
 ---@return Result  ok value is the number of rows affected
-function Storage.update(sql, params) return run('update', sql, params) end
+function OPX.Storage.update(sql, params) return run('update', sql, params) end
 
 --- Alias for `update`, for statements whose return value nobody reads.
 ---@param sql string
 ---@param params? table
 ---@return Result
-function Storage.execute(sql, params) return run('update', sql, params) end
+function OPX.Storage.execute(sql, params) return run('update', sql, params) end
 
 --- Committed or rolled back as one unit. Separate from `run` because this is the one method
 --- that resolves `false, reason` instead of raising, so `run` would read a rollback as a win.
 ---@param statements ({ query: string, values: table }|string)[]
 ---@return Result
-function Storage.transaction(statements)
+function OPX.Storage.transaction(statements)
 	local api = rawget(_G, 'MySQL')
 	local fn = api and api.transaction
 	if not fn or type(fn.await) ~= 'function' then
@@ -82,7 +83,7 @@ end
 --- Whether the database answered, with the reason if it did not. Probes once, then caches.
 --- Coroutine only.
 ---@return boolean ready, string reason
-function Storage.ready()
+function OPX.Storage.ready()
 	if ready ~= nil then return ready, readyReason end
 
 	local probe = Storage.scalar('SELECT 1')
@@ -109,7 +110,7 @@ Storage.skipped = {}
 --- first failure rather than leaving a half-applied schema, unless the migration is optional.
 ---@param migrations Migration[]
 ---@return Result  ok value is the number applied
-function Storage.migrate(migrations)
+function OPX.Storage.migrate(migrations)
 	local created = Storage.execute([[
 CREATE TABLE IF NOT EXISTS opx77_migrations (
     name VARCHAR(190) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
@@ -167,5 +168,3 @@ CREATE TABLE IF NOT EXISTS opx77_migrations (
 		(count == 0 and 'schema is up to date' or ('%d migration(s) applied'):format(count)))
 	return Result.ok(count)
 end
-
-OPX.Storage = Storage

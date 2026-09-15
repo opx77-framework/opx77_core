@@ -1,7 +1,8 @@
 --- Extension points, so a gameplay file added to this resource stays additive. A hook runs
 --- inside the operation it guards, so one that yields stalls a money transfer.
 
-local Hooks = {}
+OPX.Hooks = {}
+local Hooks = OPX.Hooks
 
 ---@type table<string, { id: integer, fn: function, priority: number }[]>
 local registry = {}
@@ -12,7 +13,7 @@ local nextId = 0
 ---@param fn fun(payload: HookPayload): boolean? return false to veto
 ---@param priority? number
 ---@return integer id  pass to `remove`
-function Hooks.register(name, fn, priority)
+function OPX.Hooks.register(name, fn, priority)
 	if type(name) ~= 'string' or type(fn) ~= 'function' then
 		error('OPX.Hooks.register expects (name: string, fn: function)', 2)
 	end
@@ -41,7 +42,7 @@ end
 
 ---@param id integer
 ---@return boolean
-function Hooks.remove(id)
+function OPX.Hooks.remove(id)
 	for _, list in pairs(registry) do
 		for i = 1, #list do
 			if list[i].id == id then
@@ -57,7 +58,7 @@ end
 ---@param name string
 ---@param payload HookPayload
 ---@return boolean allowed  false only when a hook returned an explicit false
-function Hooks.trigger(name, payload)
+function OPX.Hooks.trigger(name, payload)
 	local list = registry[name]
 	if not list then return true end
 
@@ -77,9 +78,7 @@ end
 --- Whether anything is listening, for skipping a payload nobody will read.
 ---@param name string
 ---@return boolean
-function Hooks.has(name)
+function OPX.Hooks.has(name)
 	local list = registry[name]
 	return list ~= nil and #list > 0
 end
-
-OPX.Hooks = Hooks

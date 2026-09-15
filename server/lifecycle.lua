@@ -3,7 +3,8 @@
 
 local Config = OPX.Config.SERVER
 
-local Lifecycle = {}
+OPX.Lifecycle = {}
+local Lifecycle = OPX.Lifecycle
 
 local HAS_GATE = type(Open77.ready) == 'table'
 	and type(Open77.ready.participate) == 'function'
@@ -12,7 +13,7 @@ local HAS_GATE = type(Open77.ready) == 'table'
 	and type(Open77.ready.status) == 'function'
 
 --- Declared once, at load, so every later connection arrives with a hold in our name.
-function Lifecycle.participate()
+function OPX.Lifecycle.participate()
 	if not HAS_GATE then
 		Open77.log.warn('[lifecycle] this server has no Open77.ready gate: characters still ' ..
 			'load, but nothing stops another resource placing a player first')
@@ -41,7 +42,7 @@ end
 --- release honest: releasing by a recycled id alone could clear somebody else's hold.
 ---@param source Source
 ---@param reason? string
-function Lifecycle.hold(source, reason)
+function OPX.Lifecycle.hold(source, reason)
 	if not HAS_GATE then return end
 	local session = OPX.Sessions[source]
 	if not session then return end
@@ -57,7 +58,7 @@ end
 --- running resource as the `detail` of `onPlayerReady`.
 ---@param source Source
 ---@param note? string
-function Lifecycle.release(source, note)
+function OPX.Lifecycle.release(source, note)
 	if not HAS_GATE then return end
 	local session = OPX.Sessions[source]
 
@@ -82,7 +83,7 @@ end
 --- open, and so does an id the host raises on.
 ---@param source Source
 ---@return boolean
-function Lifecycle.isReady(source)
+function OPX.Lifecycle.isReady(source)
 	if not HAS_GATE or type(Open77.ready.isReady) ~= 'function' then return true end
 	local read, open = pcall(Open77.ready.isReady, source)
 	return not read or open == true
@@ -91,7 +92,7 @@ end
 --- Everything the core does for a player who has just connected. On its own thread because it
 --- reads the database, and every failure path releases the gate rather than leaving them held.
 ---@param source Source
-function Lifecycle.beginEntry(source)
+function OPX.Lifecycle.beginEntry(source)
 	local session = OPX.EnsureSession(source)
 	if not session then
 		Open77.log.error(('[lifecycle] no verified identity for %d, refusing entry'):format(source))
@@ -122,7 +123,7 @@ end
 --- Gives up on a player who never chooses. One thread per joining player against a 1 024
 --- budget, so it exits the moment the gate is released or the slot changes hands.
 ---@param source Source
-function Lifecycle.watch(source)
+function OPX.Lifecycle.watch(source)
 	local session = OPX.Sessions[source]
 	if not session then return end
 	local userId = session.userId
@@ -154,7 +155,5 @@ function Lifecycle.watch(source)
 		end
 	end)
 end
-
-OPX.Lifecycle = Lifecycle
 
 Lifecycle.participate()

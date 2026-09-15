@@ -9,8 +9,8 @@
 
 local Config = OPX.Config.SERVER
 
-local Buckets = {}
-OPX.Buckets = Buckets
+OPX.Buckets = {}
+local Buckets = OPX.Buckets
 
 --- The host's bucket ids are uint32, and player ids are small recycled integers. A selection
 --- bucket is BASE + id, so the whole range is BASE + 1 .. BASE + ID_SPAN.
@@ -107,20 +107,20 @@ local prepared = {}
 
 --- Whether players choosing a character are isolated at all on this server.
 ---@return boolean
-function Buckets.enabled()
+function OPX.Buckets.enabled()
 	return isolate
 end
 
 --- The bucket a character goes to when nothing else names one.
 ---@return integer
-function Buckets.world()
+function OPX.Buckets.world()
 	return world
 end
 
 --- A player's own selection bucket, or nil when isolation is off or the id cannot have one.
 ---@param source Source
 ---@return integer|nil
-function Buckets.selectionOf(source)
+function OPX.Buckets.selectionOf(source)
 	source = tonumber(source)
 	if not isolate or not source or source < 1 or source > ID_SPAN or source % 1 ~= 0 then
 		return nil
@@ -132,14 +132,14 @@ end
 --- stored position left there by an earlier configuration is still recognised.
 ---@param bucket any
 ---@return boolean
-function Buckets.isSelection(bucket)
+function OPX.Buckets.isSelection(bucket)
 	return type(bucket) == 'number' and bucket > base and bucket <= base + ID_SPAN
 end
 
 --- The bucket a player is in, or nil where the host cannot say.
 ---@param source Source
 ---@return integer|nil
-function Buckets.current(source)
+function OPX.Buckets.current(source)
 	if type(api.getPlayer) ~= 'function' then return nil end
 	local read, bucket = pcall(api.getPlayer, source)
 	return read and tonumber(bucket) or nil
@@ -149,7 +149,7 @@ end
 --- bucket, which belongs to whoever holds that player id now and never to a character.
 ---@param stored any the `bucket` of a stored Position
 ---@return integer
-function Buckets.placementOf(stored)
+function OPX.Buckets.placementOf(stored)
 	local bucket = tonumber(stored)
 	if bucket == nil or bucket % 1 ~= 0 or bucket < 0 or bucket > UINT32_MAX then return world end
 	if Buckets.isSelection(bucket) then return world end
@@ -162,7 +162,7 @@ end
 ---@param bucket integer
 ---@param why string
 ---@return boolean moved
-function Buckets.move(source, bucket, why)
+function OPX.Buckets.move(source, bucket, why)
 	if type(api.setPlayer) ~= 'function' then return false end
 	local from = Buckets.current(source)
 	if from == bucket then return true end
@@ -197,7 +197,7 @@ end
 ---@param source Source
 ---@param why string
 ---@return boolean isolated
-function Buckets.isolate(source, why)
+function OPX.Buckets.isolate(source, why)
 	local bucket = Buckets.selectionOf(source)
 	if bucket == nil then return false end
 	local session = OPX.Sessions[source]
@@ -212,7 +212,7 @@ end
 ---@param why string
 ---@return boolean released  true also when there was nothing to release
 ---@return boolean moved     whether a move was made
-function Buckets.release(source, why)
+function OPX.Buckets.release(source, why)
 	local current = Buckets.current(source)
 	if current == nil or not Buckets.isSelection(current) then return true, false end
 	local moved = Buckets.move(source, world, why)

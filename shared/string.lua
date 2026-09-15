@@ -1,21 +1,22 @@
 --- String helpers. Lua patterns are byte-oriented, so anything here that measures or slices
 --- text says which unit it works in.
 
-local String = {}
+OPX.String = {}
+local String = OPX.String
 
 local utf8lib = rawget(_G, 'utf8')
 
 --- Length in characters, or nil when the bytes are not valid UTF-8.
 ---@param text string
 ---@return integer?
-function String.length(text)
+function OPX.String.length(text)
 	if utf8lib and utf8lib.len then return utf8lib.len(text) end
 	return #text
 end
 
 ---@param text string
 ---@return string
-function String.trim(text)
+function OPX.String.trim(text)
 	-- not `^%s*(.-)%s*$`: that backtracks once per trailing position, which is quadratic on a
 	-- long run of spaces and uninterruptible at C level
 	local from = text:match('^%s*()')
@@ -27,7 +28,7 @@ end
 ---@param text string
 ---@param params? table<string, any>
 ---@return string
-function String.interpolate(text, params)
+function OPX.String.interpolate(text, params)
 	if not params then return text end
 	return (text:gsub('{(%w+)}', function(name)
 		local value = params[name]
@@ -43,7 +44,7 @@ local RANDOM_DIGITS = '0123456789'
 ---@param template string `A` a letter, `1` a digit, `.` either, anything else copied
 ---        through: "AA-1111" -> "KP-8302"
 ---@return string
-function String.random(template)
+function OPX.String.random(template)
 	local out = {}
 	for i = 1, #template do
 		local token = template:sub(i, i)
@@ -63,5 +64,3 @@ function String.random(template)
 	end
 	return table.concat(out)
 end
-
-OPX.String = String

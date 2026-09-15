@@ -3,14 +3,15 @@
 
 local Result = OPX.Result
 
-local Validate = {}
+OPX.Validate = {}
+local Validate = OPX.Validate
 
 --- Trims, then enforces length and an optional pattern. Length is in characters, not bytes;
 --- malformed UTF-8 is refused rather than measured.
 ---@param value any
 ---@param opts? { min?: integer, max?: integer, pattern?: string }
 ---@return Result
-function Validate.text(value, opts)
+function OPX.Validate.text(value, opts)
 	opts = opts or {}
 	if type(value) ~= 'string' then
 		return Result.err('type', 'expected string, got ' .. type(value))
@@ -35,7 +36,7 @@ end
 ---@param value any
 ---@param opts? { integer?: boolean, min?: number, max?: number }
 ---@return Result
-function Validate.number(value, opts)
+function OPX.Validate.number(value, opts)
 	opts = opts or {}
 	local n = tonumber(value)
 	if n == nil then
@@ -51,9 +52,7 @@ end
 ---@param value any
 ---@param allowed table<any, boolean> a set, so the check is one hash read
 ---@return Result
-function Validate.oneOf(value, allowed)
+function OPX.Validate.oneOf(value, allowed)
 	if allowed[value] then return Result.ok(value) end
 	return Result.err('not-allowed', tostring(value))
 end
-
-OPX.Validate = Validate

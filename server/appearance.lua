@@ -5,8 +5,8 @@ local Result = OPX.Result
 
 local Config = OPX.Config.SHARED.APPEARANCE
 
-local Appearance = {}
-OPX.Appearance = Appearance
+OPX.Appearance = {}
+local Appearance = OPX.Appearance
 
 --- The schema version written into every stored snapshot.
 Appearance.VERSION = 1
@@ -50,7 +50,7 @@ end
 --- Whether a game build is one the core will read a stored face back into.
 ---@param value any
 ---@return boolean
-function Appearance.buildAccepted(value)
+function OPX.Appearance.buildAccepted(value)
 	return type(value) == 'string' and Config.GAME_BUILDS[value] == true
 end
 
@@ -58,7 +58,7 @@ end
 --- the column expects -- or nil and the code saying what was wrong with it.
 ---@param value any
 ---@return AppearanceSnapshot|nil canonical, string|nil error
-function Appearance.canonical(value)
+function OPX.Appearance.canonical(value)
 	if type(value) ~= 'table' then return nil, 'invalid_snapshot' end
 	if value.schemaVersion ~= Appearance.VERSION then return nil, 'unsupported_schema' end
 	if not Appearance.buildAccepted(value.gameBuild) then
@@ -128,7 +128,7 @@ end
 ---@param left AppearanceSnapshot|nil
 ---@param right AppearanceSnapshot|nil
 ---@return boolean
-function Appearance.same(left, right)
+function OPX.Appearance.same(left, right)
 	if type(left) ~= 'table' or type(right) ~= 'table' then return false end
 	if left.gameBuild ~= right.gameBuild or left.catalogDigest ~= right.catalogDigest then
 		return false

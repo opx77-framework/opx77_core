@@ -1,7 +1,8 @@
 --- The player audit log: what an operator will be asked to account for later, as opposed to
 --- `Open77.log`, which is for what the code is doing. The platform log is the only sink.
 
-local Logger = {}
+OPX.Logger = {}
+local Logger = OPX.Logger
 
 local SEVERITIES = { debug = true, info = true, warn = true, error = true }
 
@@ -48,7 +49,7 @@ end
 ---@param value any
 ---@param maximum? integer
 ---@return string
-function Logger.safe(value, maximum)
+function OPX.Logger.safe(value, maximum)
 	return bounded(value, maximum or 64)
 end
 
@@ -122,7 +123,7 @@ end
 ---@param source Source
 ---@param citizenId? CitizenId pass it when the caller has one: an entry logged without a
 ---        source is keyed by citizen id, which a departing source does not name
-function Logger.forget(source, citizenId)
+function OPX.Logger.forget(source, citizenId)
 	local bySource = tostring(source)
 	local byCitizen = citizenId ~= nil and tostring(citizenId) or nil
 	for key, seen in pairs(recent) do
@@ -133,7 +134,7 @@ function Logger.forget(source, citizenId)
 end
 
 ---@param entry LogEntry
-function Logger.log(entry)
+function OPX.Logger.log(entry)
 	if type(entry) ~= 'table' or type(entry.event) ~= 'string' then return end
 	entry.severity = SEVERITIES[entry.severity] and entry.severity or 'info'
 	entry.message = entry.message ~= nil and bounded(entry.message, MAX_MESSAGE) or nil
@@ -156,7 +157,7 @@ end
 ---@param event string
 ---@param message? string
 ---@param data? table
-function Logger.player(player, event, message, data)
+function OPX.Logger.player(player, event, message, data)
 	local playerData = player and player.PlayerData
 	Logger.log({
 		event = event,
@@ -173,9 +174,7 @@ end
 ---@param data? table
 ---@param source? Source who caused it: without one the dedupe key is global per event, and
 ---        one player looping a refusal swallows every other player's
-function Logger.security(event, message, data, source)
+function OPX.Logger.security(event, message, data, source)
 	Logger.log({ event = event, severity = 'warn', message = message, data = data,
 		source = source })
 end
-
-OPX.Logger = Logger

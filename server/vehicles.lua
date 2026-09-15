@@ -5,8 +5,8 @@ local Config = OPX.Config.VEHICLES
 local Store = OPX.Storage.Vehicles
 local Result = OPX.Result
 
-local Vehicles = {}
-OPX.Vehicles = Vehicles
+OPX.Vehicles = {}
+local Vehicles = OPX.Vehicles
 
 --- plate -> { id, citizenId }. What is spawned right now, rebuilt from nothing on a reload.
 local live = {}
@@ -43,7 +43,7 @@ end
 ---@param record string  a TweakDB record, e.g. "Vehicle.v_standard2_archer_hella_player"
 ---@param options? { garage?: string, appearance?: string, paint?: table, metadata?: table }
 ---@return table result  Result of the stored vehicle
-function Vehicles.Give(citizenId, record, options)
+function OPX.Vehicles.Give(citizenId, record, options)
 	options = options or {}
 	if type(citizenId) ~= 'string' or type(record) ~= 'string' or record == '' then
 		return Result.err('error.badRequest', 'citizenId and record are required')
@@ -87,7 +87,7 @@ end
 --- Every vehicle a character owns.
 ---@param citizenId string
 ---@return table result
-function Vehicles.List(citizenId)
+function OPX.Vehicles.List(citizenId)
 	return Store.fetchByOwner(citizenId)
 end
 
@@ -95,7 +95,7 @@ end
 --- created answers nil: it has no row, so nothing durable may be keyed on it.
 ---@param vehicleId integer
 ---@return string|nil plate, string|nil citizenId
-function Vehicles.PlateOf(vehicleId)
+function OPX.Vehicles.PlateOf(vehicleId)
 	for plateId, record in pairs(live) do
 		if record.id == vehicleId then return plateId, record.citizenId end
 	end
@@ -105,7 +105,7 @@ end
 --- The stored row, plus whether it is spawned right now.
 ---@param plateId string
 ---@return table result
-function Vehicles.Get(plateId)
+function OPX.Vehicles.Get(plateId)
 	local fetched = Store.fetchOne(plateId)
 	if not fetched.ok then return fetched end
 	local record = live[plateId]
@@ -123,7 +123,7 @@ end
 ---@param source Source
 ---@param plateId string
 ---@return table result  Result of { plate, id }
-function Vehicles.Spawn(source, plateId)
+function OPX.Vehicles.Spawn(source, plateId)
 	local data = character(source)
 	if not data then return Result.err('error.notLoggedIn', tostring(source)) end
 	if type(plateId) ~= 'string' then return Result.err('error.badRequest', 'plate') end
@@ -180,7 +180,7 @@ end
 ---@param plateId string
 ---@param garage? string  where it belongs now; omitted keeps the one it had
 ---@return table result
-function Vehicles.Store(plateId, garage)
+function OPX.Vehicles.Store(plateId, garage)
 	local record = live[plateId]
 	if record == nil then return Result.err('vehicle.notSpawned', tostring(plateId)) end
 
@@ -214,7 +214,7 @@ end
 --- Everything this character has out, stored. Called on logout and on a resource stop.
 ---@param citizenId string|nil nil stores every live vehicle
 ---@return integer stored
-function Vehicles.StoreAll(citizenId)
+function OPX.Vehicles.StoreAll(citizenId)
 	-- plates collected BEFORE anything yields: a spawn landing mid-walk inserts a key into the
 	-- table being iterated, which is Lua's undefined case for `next`
 	local plates = {}

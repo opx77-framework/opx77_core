@@ -3,8 +3,8 @@
 local Result = OPX.Result
 local Storage = OPX.Storage
 
-local Vehicles = {}
-OPX.Storage.Vehicles = Vehicles
+OPX.Storage.Vehicles = {}
+local Vehicles = OPX.Storage.Vehicles
 
 --- Where a vehicle is, as a number rather than a string: the column is a TINYINT and a
 --- gamemode adds its own states without a migration.
@@ -44,7 +44,7 @@ end
 
 ---@param citizenId string
 ---@return table result  Result of a list of vehicle entities
-function Vehicles.fetchByOwner(citizenId)
+function OPX.Storage.Vehicles.fetchByOwner(citizenId)
 	local rows = Storage.query([[
 SELECT plate, citizen_id, record, appearance, garage, state, health, body, paint, metadata
   FROM opx77_vehicles
@@ -62,7 +62,7 @@ end
 
 ---@param plate string
 ---@return table result  Result of one vehicle entity
-function Vehicles.fetchOne(plate)
+function OPX.Storage.Vehicles.fetchOne(plate)
 	local row = Storage.single([[
 SELECT plate, citizen_id, record, appearance, garage, state, health, body, paint, metadata
   FROM opx77_vehicles
@@ -77,7 +77,7 @@ end
 --- Creates one. The unique key on `plate` decides a collision, not a SELECT beforehand.
 ---@param entity table
 ---@return table result
-function Vehicles.insert(entity)
+function OPX.Storage.Vehicles.insert(entity)
 	return Storage.execute([[
 INSERT INTO opx77_vehicles (plate, citizen_id, record, appearance, garage, state, health,
                             body, paint, metadata)
@@ -100,7 +100,7 @@ end
 --- Writes back what changes while a vehicle is out: condition, paint, and where it belongs.
 ---@param entity table
 ---@return table result
-function Vehicles.save(entity)
+function OPX.Storage.Vehicles.save(entity)
 	return Storage.execute([[
 UPDATE opx77_vehicles
    SET garage = @garage, state = @state, health = @health, body = NULLIF(@body, ''),
@@ -122,7 +122,7 @@ end
 ---@param state integer
 ---@param garage string|nil
 ---@return table result
-function Vehicles.setState(plate, state, garage)
+function OPX.Storage.Vehicles.setState(plate, state, garage)
 	if garage == nil then
 		return Storage.execute(
 			'UPDATE opx77_vehicles SET state = @state WHERE plate = @plate',
@@ -135,14 +135,14 @@ end
 
 ---@param plate string
 ---@return table result
-function Vehicles.delete(plate)
+function OPX.Storage.Vehicles.delete(plate)
 	return Storage.execute('DELETE FROM opx77_vehicles WHERE plate = @plate', { plate = plate })
 end
 
 --- How many one character owns, for the per-character ceiling.
 ---@param citizenId string
 ---@return table result  Result of an integer
-function Vehicles.countByOwner(citizenId)
+function OPX.Storage.Vehicles.countByOwner(citizenId)
 	local row = Storage.single(
 		'SELECT COUNT(*) AS total FROM opx77_vehicles WHERE citizen_id = @citizen',
 		{ citizen = citizenId })

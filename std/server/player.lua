@@ -68,7 +68,8 @@ OPX.GetMetadata = OPX.GetMetadata
 ---@return boolean sampled
 function OPX.SamplePosition(player) end
 
---- Puts a character the session owns into the world. Coroutine only.
+--- Puts a character the session owns into the world. Refuses `entry.noIdentity` when the
+--- session departed or changed hands during the reads. Coroutine only.
 ---@param source Source
 ---@param citizenId CitizenId
 ---@return Result

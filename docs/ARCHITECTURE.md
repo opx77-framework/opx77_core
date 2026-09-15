@@ -1042,6 +1042,12 @@ prévenu.
   une même ligne, c'est la dernière sauvegarde qui gagne en silence.
 - Les vêtements (`OPX.Clothing.load`) ne refusent jamais la connexion : une ligne illisible
   donne `nil`, et `nil` n'est ni habillé ni sauvegardé par personne.
+- Après les trois lectures, la session est relue : si le joueur est parti pendant l'attente
+  (`departing`, ou une autre session sur l'identifiant), la connexion est refusée
+  (`entry.noIdentity`) avant tout enregistrement. Le `OPX.Logout` du départ a déjà tourné et ne
+  repasserait pas : le fantôme resterait au roster jusqu'à l'éviction de l'autosave, son
+  propriétaire reconnecté recevrait `character.inUse`, et un identifiant recyclé hériterait de
+  son `PlayerData`.
 
 `OPX.Save` échantillonne la position puis écrit la ligne (coroutine seulement).
 

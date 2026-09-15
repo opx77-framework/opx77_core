@@ -421,6 +421,9 @@ function OPX.Login(source, citizenId)
 	if not groups.ok then return groups end
 
 	local clothing = OPX.Clothing.load(citizenId)
+	if OPX.Sessions[source] ~= session or session.departing then
+		return Result.err('entry.noIdentity', tostring(source))
+	end
 
 	entity.source = source
 	local player = OPX.CreatePlayer(entity, false)

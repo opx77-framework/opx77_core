@@ -8,7 +8,7 @@
 --- @param citizenId {string}
 --- @returns {boolean, string|nil}
 function OPX.SelectCharacter(citizenId)
-	if type(citizenId) ~= 'string' then return false, 'bad-citizen-id' end
+	if type(citizenId) ~= 'string' then return false, 'error.badRequest' end
 	TriggerServerEvent(OPX.Events.Server.SELECT_CHARACTER, { citizenId = citizenId })
 	return true
 end
@@ -19,7 +19,7 @@ end
 --- @param registration {table}
 --- @returns {boolean, string|nil}
 function OPX.CreateCharacter(registration)
-	if type(registration) ~= 'table' then return false, 'bad-request' end
+	if type(registration) ~= 'table' then return false, 'error.badRequest' end
 
 	local firstName = OPX.ValidateName(registration.firstName)
 	if not firstName.ok then return false, 'character.badName' end
@@ -43,7 +43,7 @@ end
 --- @param citizenId {string}
 --- @returns {boolean, string|nil}
 function OPX.DeleteCharacter(citizenId)
-	if type(citizenId) ~= 'string' then return false, 'bad-citizen-id' end
+	if type(citizenId) ~= 'string' then return false, 'error.badRequest' end
 	TriggerServerEvent(OPX.Events.Server.DELETE_CHARACTER, { citizenId = citizenId })
 	return true
 end

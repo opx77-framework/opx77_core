@@ -1370,7 +1370,10 @@ Chaque export répond une table simple `{ ok = boolean, ... }`, jamais un `OPX.R
   de postes — donc `minGrade` y est le deuxième paramètre et le troisième sur `HasJob`.
 - `SelectCharacter`, `CreateCharacter`, `DeleteCharacter` et `RequestCharacters` sont des
   requêtes : la réponse dit seulement qu'elle est partie, le résultat arrive sur
-  `OPX.Events.Local.PLAYER_LOADED` ou `.REFUSED`.
+  `OPX.Events.Local.PLAYER_LOADED` ou `.REFUSED`. Un argument du mauvais type répond
+  `error.badRequest` sans rien envoyer, et les contrôles locaux de `CreateCharacter` les codes
+  du serveur (`character.badName`, `character.badOrigin`) : chaque `error` est une clé du
+  catalogue, qu'`opx77_charselector` et `opx77_charcreator` savent rendre.
 - `GetSharedConfig` ne rend que la configuration dont une interface a légitimement besoin ; les
   définitions statiques passent par `GetJobs`, `GetGangs` et `GetOrigins`. `locale` y est la
   langue **en vigueur** (`OPX.Locale.current()`), pas celle configurée : elles diffèrent après

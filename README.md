@@ -69,7 +69,9 @@ a `.sql` file is not a script a manifest can list either. **The two are edited t
 **There are no migrations.** `CREATE TABLE IF NOT EXISTS` creates a missing table and never
 alters one that exists. While the project is in development, a change to a table ships as a
 change to its statement, and a database created before it has to be dropped (the tables, or the
-whole database) so the core creates it again at the next start. If any statement fails, the boot
+whole database) so the core creates it again at the next start. A database created by 0.5.0's
+migrations already matches these statements, table for table; only its `opx77_migrations` table
+is left over, which nothing reads and which can be dropped. If any statement fails, the boot
 stops there: `OPX.BootError` is `schema failed: <table>`, the log says so, and nobody can be logged
 in — exactly as without a database. `opx77_status` creates its own table in its own resource.
 

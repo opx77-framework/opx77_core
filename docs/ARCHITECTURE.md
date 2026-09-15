@@ -519,7 +519,8 @@ chaînes Lua (voir `docs/unknowns.md`, « paramètres nommés »).
 Il n'y a pas de migrations, et c'est voulu tant que le projet est en développement : la base est
 recréée à chaque changement de table plutôt que migrée, et une instruction `IF NOT EXISTS` ne
 modifie jamais une table existante. Il n'y a donc ni table d'historique, ni migration optionnelle,
-ni reprise au démarrage suivant.
+ni reprise au démarrage suivant. Une base créée par les migrations de la 0.5.0 correspond déjà à
+ces instructions, table pour table ; seule sa table `opx77_migrations` reste, que plus rien ne lit.
 
 `OPX.Storage.applySchema` s'arrête à la première instruction qui échoue plutôt que de continuer sur
 un schéma incomplet : le démarrage pose `OPX.BootError = 'schema failed: <table>'` et le core
@@ -1242,8 +1243,9 @@ se prouve contre le personnage chargé par la connexion, jamais contre ce que le
   interne `PLAYER_UNLOADED`, pour que l'état soit écrit plutôt que perdu au prochain
   rechargement de l'hôte) et à l'arrêt de la ressource.
 - `onVehicleRemoved` : l'hôte a retiré un véhicule, détruit ou pris par une autre ressource. Le
-  véhicule est oublié tout de suite, et l'état `STORED` est écrit sur un thread : un gestionnaire
-  d'événement n'est pas une coroutine, et une écriture en base y céderait la main hors thread.
+  véhicule est oublié tout de suite, et l'état `STORED` est écrit sur un thread, comme toute
+  écriture du core (voir « Le pont MySQL ») : la plateforme laisse un gestionnaire d'événement
+  céder la main, mais le gestionnaire rend tout de suite et l'écriture n'attend personne.
 - La boucle de sauvegarde (`SAVE_SECONDS`) est la garantie que les dégâts sont conservés, pas le
   gestionnaire d'arrêt. Elle photographie les clés et enveloppe chaque sauvegarde dans un
   `pcall` : une seule levée mettrait fin, en silence, à la persistance de l'état pour tout le
@@ -1418,12 +1420,31 @@ d'événements du journal d'audit, pas des clés : un joueur ne lit jamais « pa
 ## Limites connues
 
 - Les bannissements et la file d'attente ne sont pas gérés.
-- `OPX.Storage.ready` garde sa réponse pour toute la durée de la ressource : une base qui revient
-  après le démarrage n'est prise en compte qu'au redémarrage du core.
+- `OPX.BootError` est posé une seule fois, par le fil de démarrage (`server/main.lua`), et n'est
+  jamais effacé : une base qui revient après le démarrage n'est prise en compte qu'au redémarrage
+  du core. `OPX.Storage.ready` garde aussi sa sonde, mais rien ne la relit après le démarrage.
 - `OPX.Storage.Players.toEntity`, `OPX.GetPlayerCount`, `OPX.Hooks.has` et les champs de session
   `connectedAt`, `heldAt` et `charactersSent` ne sont lus par aucun fichier du core, ni par aucune
   autre ressource OPX. Ils restent : ils font partie de l'API des plug-ins serveur qu'opx77_doc
   documente.
 - `OPX.GetPlayersByJob` / `OPX.GetPlayersByGang` passent par `OPX.GetPlayers`, qui peut évincer un
   emplacement périmé ; l'éviction ne cède pas la main (la sauvegarde part sur un thread), mais une
-  lecture « en mémoire » peut ainsi déclencher une déconnexion.
+  lecture « en mémoire » peut ainsi déclencher un logout et une sauvegarde.
+- Un client qui se réannonce (`opx77:server:ready`) avec un personnage chargé reçoit
+  `playerLoaded` de nouveau, et il se réannonce au démarrage de la ressource puis à chaque
+  `open77:worldReady` : chaque rechargement du monde donne donc un second `onPlayerLoaded`. C'est
+  voulu et sans effet de bord pour les satellites, et `opx77_inventory` s'en sert pour renvoyer
+  les tas au sol : ne pas le retirer.
+- `/opx77.select` et `opx77:server:selectCharacter` passent deux refroidissements d'une seconde,
+  la porte (`select.request`) puis l'opération (`select`) ; la création et la suppression aussi,
+  avec 3 s sur l'opération (`create`, `delete`). Un refus `error.tooFast` de la seconde revient
+  au client comme tout autre refus.
+- `PlayerData` part entier sur `playerLoaded` et chaque `setPlayerData`, visage compris, alors
+  qu'un message ne porte qu'environ 1 024 valeurs : un visage de `MAX_OPTIONS` (256) options en
+  compte plus de 2 000 à lui seul. La ligne d'audit `appearance.saved` donne le nombre d'options
+  d'un vrai visage ; au-delà d'environ 150, retirer `appearance` du `PlayerData` envoyé (que lit
+  `opx77_appearance` à la connexion) ou abaisser `MAX_OPTIONS`.
+- `OPX.Login` envoie `playerLoaded` avant que `OPX.PlaceCharacter` tue et fasse réapparaître le
+  personnage : `opx77_appearance` pourrait appliquer le visage et annoncer `gameplayReady` sur un
+  pantin sur le point d'être remplacé. Non vérifié en jeu ; comparer dans le journal la ligne
+  « logged in » et le kill de placement avant de changer l'ordre.

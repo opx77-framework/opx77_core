@@ -369,10 +369,16 @@ RegisterNetEvent(OPX.Events.Server.STORE_VEHICLE, function(payload)
 		local data = character(src)
 		local record = live[plateId]
 		if not data or record == nil or record.citizenId ~= data.citizenId then
-			return OPX.Refuse(src, 'vehicle.notFound', operation)
+			OPX.Refuse(src, 'vehicle.notFound', operation)
+			OPX.NotifyLocale(src, 'vehicle.notFound', nil, 'error')
+			return
 		end
 		local put = Vehicles.Store(plateId)
-		if not put.ok then return OPX.Refuse(src, put.error, operation) end
+		if not put.ok then
+			OPX.Refuse(src, put.error, operation)
+			OPX.NotifyLocale(src, put.error, nil, 'error')
+			return
+		end
 		OPX.NotifyLocale(src, 'vehicle.stored', { plate = plateId }, 'success')
 	end)
 end)

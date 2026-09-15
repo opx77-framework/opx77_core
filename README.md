@@ -251,8 +251,8 @@ them, and without the operation a satellite cannot tell whose answer arrived. A 
 `code` keeps working — the field was added after `code` and `kind`.
 
 A refused `selectCharacter` is answered on this event only: the selector renders it. A refused
-`createCharacter` or `spawnVehicle` also raises a toast with the same text, for a client whose
-form is already gone.
+`createCharacter`, `spawnVehicle` or `storeVehicle` also raises a toast with the same text, for a
+client whose form is already gone or that draws no refusal at all.
 
 The `code` is always a key the core's catalogue carries. A refusal whose underlying cause has
 no entry — a storage failure answering `query-failed`, a validator answering `too-short` — is

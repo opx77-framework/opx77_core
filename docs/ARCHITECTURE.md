@@ -1236,7 +1236,9 @@ se prouve contre le personnage chargé par la connexion, jamais contre ce que le
 - `opx77:server:spawnVehicle` et `opx77:server:storeVehicle` rederivent tout : le personnage
   depuis la connexion, la propriété depuis la ligne. Pour ranger, la propriété est vérifiée avant
   de retirer quoi que ce soit du monde : `live` est indexé par plaque, un joueur pourrait sinon
-  ranger la voiture d'un autre en la nommant.
+  ranger la voiture d'un autre en la nommant. Un échec de l'une ou l'autre envoie le refus
+  (`OPX.Refuse`) **et** un toast d'erreur du même code : aucune ressource OPX n'écoute ces deux
+  opérations, et sans le toast le joueur ne saurait pas pourquoi rien ne s'est passé.
 
 ## Les exports serveur
 
@@ -1399,8 +1401,6 @@ réserve, même source).
 - `OPX.GetPlayersByJob` / `OPX.GetPlayersByGang` passent par `OPX.GetPlayers`, qui peut évincer un
   emplacement périmé ; l'éviction ne cède pas la main (la sauvegarde part sur un thread), mais une
   lecture « en mémoire » peut ainsi déclencher une déconnexion.
-- `opx77:server:spawnVehicle` en échec envoie à la fois un refus (`OPX.Refuse`) et un toast
-  d'erreur (`OPX.NotifyLocale`) avec le même code ; `storeVehicle` n'envoie que le refus.
 - `OPX.Vehicles.Give` lève `vehicle.plateExhausted` avec la dernière plaque tirée en détail, et
   ne compte que les échecs contenant `Duplicate` (sensible à la casse), alors que
   `OPX.CreateCharacter` compare `duplicate` en minuscules.

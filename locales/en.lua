@@ -8,6 +8,7 @@ OPX.Locale.register('en', {
 	['character.notFound'] = 'No character carries that citizen ID.',
 	['character.badName'] = 'That name cannot be used.',
 	['character.badOrigin'] = 'That is not a valid lifepath.',
+	['character.badBirthdate'] = 'That birth date cannot be used.',
 	['character.created'] = 'Character created. Your citizen ID is {citizenId}.',
 	['character.deleted'] = 'Character deleted.',
 	['character.inUse'] = 'That character is already in the world.',

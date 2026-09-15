@@ -86,6 +86,24 @@ function OPX.SendCharacters(source, pushed)
 end
 
 --- @author DemiAutomatic
+--- @type {integer[]}
+--- @description Days per month, February at its leap-year length.
+local MONTH_DAYS = { 31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31 }
+
+--- @author DemiAutomatic
+--- @method realDate
+--- @description Answers whether a YYYY-MM-DD date exists, from year 1900.
+--- @param text {string}
+--- @returns {boolean}
+local function realDate(text)
+	local year, month, day = text:match('^(%d%d%d%d)%-(%d%d)%-(%d%d)$')
+	year, month, day = tonumber(year), tonumber(month), tonumber(day)
+	if year == nil or year < 1900 then return false end
+	if month < 1 or month > 12 then return false end
+	return day >= 1 and day <= MONTH_DAYS[month]
+end
+
+--- @author DemiAutomatic
 --- @method validateRegistration
 --- @description Checks a character registration received from a client.
 --- @param payload {any}
@@ -110,6 +128,9 @@ local function validateRegistration(payload)
 	local birthDate = OPX.Validate.text(payload.birthDate, {
 		min = 8, max = 10, pattern = '^%d%d%d%d%-%d%d%-%d%d$',
 	})
+	if birthDate.ok and not realDate(birthDate.value) then
+		return Result.err('character.badBirthdate', birthDate.value)
+	end
 
 	return Result.ok({
 		firstName = firstName.value,

@@ -899,8 +899,15 @@ chargé, pas même le titulaire du compte.
 
 **La création.** `validateRegistration` vérifie une inscription venue du réseau ; le compte est
 pris dans la session et jamais dans la charge utile, car `source` est la seule valeur qu'un
-client ne peut pas falsifier. La date de naissance n'est que vérifiée en forme, jamais
-analysée : le bac à sable retire `os`, il n'y a pas d'horloge contre laquelle la vérifier.
+client ne peut pas falsifier. La date de naissance est vérifiée en forme, puis au calendrier
+(`realDate` : année à partir de 1900, mois de 1 à 12, jour dans `MONTH_DAYS`, février à 29 jours
+parce que l'année ne vaut pas d'être résolue pour une date écrite une fois) : une date bien formée
+qui n'existe pas est refusée `character.badBirthdate`, au lieu d'être stockée pour la vie du
+personnage. Une date absente ou illisible devient toujours `2050-01-01` (`/opx77.create` la rend
+optionnelle). « Pas dans le futur » n'est pas vérifié : `Open77.time.utc` donne l'année réelle,
+que dépassent les dates de l'univers, dont ce `2050-01-01` et l'indication du formulaire
+d'`opx77_charcreator` ; la date de référence reste à choisir. Le contrôle est ici et non chez le
+client, où `Open77.time.utc` n'existe pas et où un client modifié le sauterait.
 Dans `OPX.CreateCharacter`, le refroidissement (clé `create`, 3 s) vient **après** la
 validation : il protège l'écriture, pas un nom mal tapé. Le plafond compte des **lignes** et non
 des personnages (`countRows`), parce que la suppression douce garde la ligne alors que

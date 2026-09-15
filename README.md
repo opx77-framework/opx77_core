@@ -270,7 +270,7 @@ resource acting on its own authority.
 |---|---|---|
 | `opx77:server:ready` | none | re-sends the roster, or `playerLoaded` if one is already in |
 | `opx77:server:selectCharacter` | `{ citizenId }` | enters the world as that character |
-| `opx77:server:createCharacter` | `{ firstName, lastName, origin, gender, birthDate }` | creates one |
+| `opx77:server:createCharacter` | `{ firstName, lastName, origin, gender, birthDate }` | creates one; a well-formed `birthDate` that is not a real date from 1900 answers `character.badBirthdate`, a missing or unreadable one becomes `2050-01-01` |
 | `opx77:server:deleteCharacter` | `{ citizenId }` | soft-deletes one |
 | `opx77:server:reportPosition` | `{ heading }` | a heading hint; x/y/z are re-derived server-side |
 | `opx77:server:saveAppearance` | `{ snapshot, citizenId? }` | validates and stores a captured face |

@@ -8,6 +8,7 @@ OPX.Locale.register('fr', {
 	['character.notFound'] = 'Aucun personnage ne porte cet identifiant citoyen.',
 	['character.badName'] = 'Ce nom ne peut pas être utilisé.',
 	['character.badOrigin'] = "Ce parcours de vie n'existe pas.",
+	['character.badBirthdate'] = 'Cette date de naissance ne peut pas être utilisée.',
 	['character.created'] = 'Personnage créé. Votre identifiant citoyen est {citizenId}.',
 	['character.deleted'] = 'Personnage supprimé.',
 	['character.inUse'] = 'Ce personnage est déjà en jeu.',

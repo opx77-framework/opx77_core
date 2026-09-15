@@ -3,7 +3,6 @@
 --- @description Numeric helpers: clamp, finiteness, distance and digit grouping.
 
 OPX.Math = {}
-local Math = OPX.Math
 
 --- @author DemiAutomatic
 --- @method OPX.Math.clamp

@@ -8,7 +8,6 @@
 local Result = OPX.Result
 
 OPX.Validate = {}
-local Validate = OPX.Validate
 
 --- @author DemiAutomatic
 --- @method OPX.Validate.text

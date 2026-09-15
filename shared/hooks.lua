@@ -3,7 +3,6 @@
 --- @description Named extension points a gameplay file can veto through.
 
 OPX.Hooks = {}
-local Hooks = OPX.Hooks
 
 --- @author DemiAutomatic
 --- @type {table<string, table[]>}

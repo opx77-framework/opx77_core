@@ -13,7 +13,6 @@ local Result = OPX.Result
 local Storage = OPX.Storage
 
 OPX.Storage.Inventories = {}
-local Inventories = OPX.Storage.Inventories
 
 --- @author DemiAutomatic
 --- @type {integer}

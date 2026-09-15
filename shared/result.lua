@@ -3,7 +3,6 @@
 --- @description Success or failure as a value, never an ambiguous nil.
 
 OPX.Result = {}
-local Result = OPX.Result
 
 --- @author DemiAutomatic
 --- @method OPX.Result.ok

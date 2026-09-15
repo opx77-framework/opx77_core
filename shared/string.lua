@@ -3,7 +3,6 @@
 --- @description String helpers: length, trim, placeholders and random templates.
 
 OPX.String = {}
-local String = OPX.String
 
 --- @author DemiAutomatic
 --- @type {table|nil}

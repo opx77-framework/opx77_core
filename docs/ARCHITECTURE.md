@@ -1337,9 +1337,6 @@ réserve, même source).
 ## Limites connues
 
 - Les bannissements et la file d'attente ne sont pas gérés.
-- Les alias `local Result = OPX.Result` dans `shared/result.lua`, `local Math = OPX.Math` dans
-  `shared/math.lua` et `local String = OPX.String` dans `shared/string.lua` ne sont plus lus depuis
-  que les fonctions sont définies par leur chemin complet.
 - `toEntity` de `server/storage/vehicles.lua` décode `body`, `paint` et `metadata` avec
   `json.decode` sans `pcall`, contrairement au `decode` de `players.lua` et `inventories.lua` : une
   cellule JSON malformée lève dans `fetchOne` / `fetchByOwner` au lieu d'être absente, ce qui tue
@@ -1372,8 +1369,6 @@ réserve, même source).
   `You already have {max} characters.` — la commande rend `locale(OPX.RefusalKey(created.error))`
   sans le paramètre `max`, que la porte réseau `opx77:server:createCharacter` passe bien
   (constaté dans le transcript du harnais).
-- `server/commands.lua` : la locale `Config` (`OPX.Config.SERVER`) n'est lue nulle part dans le
-  fichier.
 - `server/commands.lua` : `opx77.group` renvoie en cas d'échec le code brut
   (`tostring(members.error)`, par exemple `query-failed`) plutôt qu'une ligne de locale ;
   `opx77.job` et `opx77.gang` ajoutent `detail` à la ligne rendue. Ce sont des commandes ACL,

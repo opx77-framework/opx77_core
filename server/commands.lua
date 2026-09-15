@@ -3,11 +3,6 @@
 --- @description The core's commands and their chat autocomplete suggestions.
 
 --- @author DemiAutomatic
---- @type {table}
---- @description The server configuration table.
-local Config = OPX.Config.SERVER
-
---- @author DemiAutomatic
 --- @type {table[]}
 --- @description Every registered command in order, with its ACL gate.
 local registered = {}

@@ -1341,8 +1341,10 @@ réserve, même source).
 - Les bannissements et la file d'attente ne sont pas gérés.
 - `OPX.Storage.ready` garde sa réponse pour toute la durée de la ressource : une base qui revient
   après le démarrage n'est prise en compte qu'au redémarrage du core.
-- `OPX.Storage.Players.toEntity` est publiée mais aucun fichier du core ne la lit par ce chemin
-  (à vérifier dans les autres ressources avant de la garder).
+- `OPX.Storage.Players.toEntity`, `OPX.GetPlayerCount`, `OPX.Hooks.has` et les champs de session
+  `connectedAt`, `heldAt` et `charactersSent` ne sont lus par aucun fichier du core, ni par aucune
+  autre ressource OPX. Ils restent : ils font partie de l'API des plug-ins serveur qu'opx77_doc
+  documente.
 - `OPX.GetPlayersByJob` / `OPX.GetPlayersByGang` passent par `OPX.GetPlayers`, qui peut évincer un
   emplacement périmé ; l'éviction ne cède pas la main (la sauvegarde part sur un thread), mais une
   lecture « en mémoire » peut ainsi déclencher une déconnexion.
@@ -1357,7 +1359,3 @@ réserve, même source).
   (`tostring(members.error)`, par exemple `query-failed`) plutôt qu'une ligne de locale ;
   `opx77.job` et `opx77.gang` ajoutent `detail` à la ligne rendue. Ce sont des commandes ACL,
   mais la réponse contraste avec la règle « jamais un code brut » des refus.
-- `server/exports.lua` : chaque étape `stage` crée un champ `slots` (emplacements pris) que le
-  commentaire de structure ne mentionnait pas ; sans conséquence.
-- `server/exports.lua` : le journal de `GetChanges` contient une clé `head` qui n'est pas dans la
-  réponse documentée du README (`cursor`, `reset`, `more`, `generation`, `events`).

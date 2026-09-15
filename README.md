@@ -177,7 +177,7 @@ caller as a codec error.
 | `GetVersion()` | read | `version`, `exports` (the contract number, bumped on a breaking change), and the `scopes` this caller holds |
 | `GetIdentity(target)` | read | `source`, `userId`, `citizenId`, `online`, `loaded`, `gateHeld`, `released`. A player id is online only; a citizen id is also found offline |
 | `GetVehiclePlate(vehicleId)` | read | `plate` and `citizenId` of an owned vehicle the core spawned, absent for any other |
-| `GetChanges(since)` | read | `cursor`, `reset`, `more`, `generation`, and at most 16 `events` of kind `loaded`, `unloaded` or `deleted`, each with `source` and `citizenId` |
+| `GetChanges(since)` | read | `cursor`, `head` (the newest cursor), `reset`, `more`, `generation`, and at most 16 `events` of kind `loaded`, `unloaded` or `deleted`, each with `source` and `citizenId` |
 | `InventoryEnsure(kind, owner, { slots, maxWeight })` | `inventory` | `id`, `slots`, `maxWeight`, `created`. The size is used only when it creates |
 | `InventoryRead(id, after?)` | `inventory` | one page of `items` (`slot`, `name`, `count`, `metadata`) after slot `after`, the header on the first page, and `nextAfter` while there may be more |
 | `InventoryStage(token, id, rows)` | `inventory` | appends stacks to a save staged under `token`; the first stage of a container empties it |
@@ -468,7 +468,7 @@ core disables nothing; it checks `GetResourceState` at boot and prints once what
 
 ## Locales
 
-`LOCALE` in `config.lua` picks the catalogue player-facing text is read from — `"en"` or `"fr"` as shipped. Each resource carries its own catalogue, so this is set here as well as in `opx77_core`: the core's `Locale` export is client-only and asynchronous, and a resource that renders text at load cannot wait on it.
+`SHARED.LOCALE` in `config/shared.lua` picks the catalogue player-facing text is read from — `"en"` or `"fr"` as shipped. Every other OPX resource carries its own catalogue and its own `LOCALE`, because the core's `Locale` export is client-only and asynchronous, and a resource that renders text at load cannot wait on it; the export is there for a client resource that needs one of the core's own keys, a refusal code for instance.
 
 To add a language, copy `locales/en.lua` to `locales/<code>.lua`, change the code in the `register` call, translate the values, add a `shared_script "locales/<code>.lua"` line to `open77.lua` beside the others, and set `LOCALE` to it. A key missing from a catalogue falls back to English, then to the key itself. `Open77.log` lines and console output stay English whatever the setting.
 

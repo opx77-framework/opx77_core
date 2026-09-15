@@ -153,9 +153,8 @@ quelque chose.
 La doc du bac à sable ne le liste pas parmi les retraits, mais **aucune** des
 37 ressources officielles ne l'utilise, ni `getmetatable`.
 
-**Ce que fait le core.** Rien n'en dépend. `OPX.Tune` est soit le proxy rendu
-par `Open77.tunables.declare` (construit côté hôte, pas en Lua), soit une
-table plate de valeurs par défaut — les deux répondent à `Tune.CLÉ`.
+**Ce que fait le core.** Rien n'en dépend. `OPX.Tune` est le proxy rendu par
+`Open77.tunables.declare`, construit côté hôte et non en Lua.
 
 ## Tranché : `Open77.time.monotonic()` rend des **secondes**
 

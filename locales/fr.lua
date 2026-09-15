@@ -106,7 +106,7 @@ OPX.Locale.register('fr', {
 
 	['error.unavailable'] = 'Indisponible pour le moment.',
 	['error.badRequest'] = 'Requête incomprise.',
-	['error.tooFast'] = 'Trop vite -- reessayez dans un instant.',
+	['error.tooFast'] = 'Ralentissez et réessayez dans un instant.',
 	['error.notLoggedIn'] = "Vous n'êtes pas encore en jeu.",
 	['error.noPermission'] = "Vous n'avez pas le droit de faire ça.",
 

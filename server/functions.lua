@@ -186,7 +186,6 @@ function OPX.CommandResult(source, raw, accepted, message)
 			type = accepted and 'info' or 'error',
 			author = OPX.Config.SHARED.SERVER_NAME,
 			text = message,
-			color = accepted and { 120, 220, 232 } or { 255, 76, 92 },
 		})
 	else
 		print(message)

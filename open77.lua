@@ -76,4 +76,6 @@ permissions {
   "world.vehicles",
 
   "acl.read",
+
+  "players.disconnect",
 }

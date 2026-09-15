@@ -57,9 +57,12 @@ s'installer sur un serveur nu.
 - `acl.read` — `Open77.acl.isAllowed` en lecture seule : une commande restreinte n'est suggérée
   dans le chat qu'à un joueur que l'ACL laisserait la lancer. Rien ici n'accorde de droit et aucun
   gestionnaire ne le vérifie : l'hôte résout `command.<nom>` avant que le gestionnaire tourne.
+- `players.disconnect` — `server/lifecycle.lua` seulement, pour fermer la session d'un joueur sans
+  identité vérifiée : relâcher la barrière seule le laisserait dans le bucket 0 sans personnage,
+  pour toujours. Ce n'est pas un outil de modération.
 
 Délibérément non demandées : `world.props`, `world.elevators`, `combat.config`,
-`players.damage.read`, `players.disconnect`. Rien à demander pour `Open77.routingBuckets`, qui
+`players.damage.read`. Rien à demander pour `Open77.routingBuckets`, qui
 isole un joueur en train de choisir un personnage : l'API est installée pour toute resource
 serveur et n'exige aucune permission.
 
@@ -781,8 +784,15 @@ sur une incarnation.
   répond.
 - `OPX.Lifecycle.isReady` lit comme ouverte une barrière pour un identifiant sur lequel l'hôte
   lève.
-- `OPX.Lifecycle.beginEntry` tourne sur son propre thread pour la lecture en base, et chaque
-  chemin d'échec libère la barrière plutôt que de laisser le joueur tenu. Le déplacement dans le
+- `OPX.Lifecycle.beginEntry` tourne sur son propre thread pour la lecture en base, et aucun
+  chemin d'échec ne laisse le joueur tenu. Sans identité vérifiée, `refuseEntry` relâche la
+  barrière puis ferme la session par `Open77.players.disconnect`, avec le texte
+  `entry.noIdentity` que le joueur lit sur son écran ; chaque tentative du sélecteur retomberait
+  sur la même absence d'identité. Si l'hôte refuse la déconnexion, une ligne d'erreur le dit et le
+  refus part sur le fil (`OPX.Refuse`, opération `entry`). Le core ne teste pas la présence de
+  l'API : elle est documentée. Un roster en échec et le délai de sélection ne déconnectent pas :
+  le joueur est isolé, le sélecteur redemande le roster, et `SelectCharacter` marche encore après
+  le délai (un opx77_charcreator encore ouvert serait sinon expulsé). Le déplacement dans le
   bucket de sélection se fait volontairement sous la barrière fermée : il n'écrit ni
   transformation ni état de vie, et pris à ce moment personne d'autre n'est jamais répliqué dans
   le monde que ce joueur s'apprête à charger. Un refus aussi tôt est retenté au `READY` du

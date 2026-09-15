@@ -26,8 +26,9 @@ function OPX.Lifecycle.release(source, note) end
 function OPX.Lifecycle.isReady(source) end
 
 --- Everything the core does for a player who has just connected: hold the gate, isolate them in
---- their selection bucket, send the roster and start the selection watch. Every failure path
---- releases the gate.
+--- their selection bucket, send the roster and start the selection watch. A player with no
+--- verified identity is disconnected with `entry.noIdentity` (refused on the wire when the host
+--- will not disconnect); a failed roster releases the gate and the client asks again.
 ---@param source Source
 function OPX.Lifecycle.beginEntry(source) end
 

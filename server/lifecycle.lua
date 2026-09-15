@@ -81,6 +81,22 @@ function OPX.Lifecycle.isReady(source)
 end
 
 --- @author DemiAutomatic
+--- @method refuseEntry
+--- @description Releases the gate and disconnects a player the core cannot admit.
+--- @param source {Source}
+--- @param code {string} A locale key, shown on the player's screen.
+--- @param note {string}
+local function refuseEntry(source, code, note)
+	Lifecycle.release(source, note)
+	local closed, reason = Open77.players.disconnect(source, locale(code))
+	if not closed then
+		Open77.log.error(('[lifecycle] could not disconnect %d (%s): %s')
+			:format(source, note, tostring(reason)))
+		OPX.Refuse(source, code, OPX.Operations.ENTRY)
+	end
+end
+
+--- @author DemiAutomatic
 --- @method OPX.Lifecycle.beginEntry
 --- @description Holds, isolates and sends the roster to a connecting player.
 --- @param source {Source}
@@ -88,7 +104,7 @@ function OPX.Lifecycle.beginEntry(source)
 	local session = OPX.EnsureSession(source)
 	if not session then
 		Open77.log.error(('[lifecycle] no verified identity for %d, refusing entry'):format(source))
-		Lifecycle.release(source, 'no-identity')
+		refuseEntry(source, 'entry.noIdentity', 'no-identity')
 		return
 	end
 

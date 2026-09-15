@@ -410,6 +410,13 @@ Every joiner is also held by the platform's own `__platform` hold, which clears 
 client emits `open77:session:gameplayReady`. With no resource emitting it, `Open77.ready.isReady`
 stays false and `onPlayerReady` never fires. The core reads neither, so it is unaffected.
 
+A player the host vouches no identity for cannot be given a character, so the core releases its
+hold and disconnects them with `Open77.players.disconnect`, the `entry.noIdentity` text on their
+screen — the one reason the manifest declares `players.disconnect`. Should the host refuse that
+call, the refusal goes out on the `entry` operation instead and an error line says why. A failed
+roster read and the selection deadline never disconnect: the player stays isolated and the
+selector asks again.
+
 ### The selection bucket
 
 A player with no character loaded waits in a routing bucket of their own, `ENTRY.BUCKET.BASE`

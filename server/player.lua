@@ -464,13 +464,13 @@ function OPX.Save(identifier, loggedOut)
 end
 
 --- @author DemiAutomatic
---- @method OPX.Logout
---- @description Unloads a character and dispatches its save, idempotently.
---- @param source {Source}
-function OPX.Logout(source)
-	source = tonumber(source)
+--- @method unload
+--- @description Takes a loaded character out of the roster and announces it.
+--- @param source {Source|nil}
+--- @returns {Player|nil}
+local function unload(source)
 	local player = source and OPX.Players[source]
-	if not player then return end
+	if not player then return nil end
 
 	OPX.UnregisterPlayer(player)
 
@@ -479,6 +479,17 @@ function OPX.Logout(source)
 
 	TriggerClientEvent(OPX.Events.Client.PLAYER_UNLOADED, source)
 	TriggerEvent(OPX.Events.Internal.PLAYER_UNLOADED, source, player.PlayerData)
+	return player
+end
+
+--- @author DemiAutomatic
+--- @method OPX.Logout
+--- @description Unloads a character and dispatches its save, idempotently.
+--- @param source {Source}
+function OPX.Logout(source)
+	source = tonumber(source)
+	local player = unload(source)
+	if not player then return end
 
 	OPX.SamplePosition(player)
 	player.MaySample = false
@@ -497,16 +508,8 @@ end
 --- @returns {Result}
 function OPX.LogoutAndWait(source)
 	source = tonumber(source)
-	local player = source and OPX.Players[source]
+	local player = unload(source)
 	if not player then return Result.ok(false) end
-
-	OPX.UnregisterPlayer(player)
-
-	local session = OPX.Sessions[source]
-	if session then session.citizenId = nil end
-
-	TriggerClientEvent(OPX.Events.Client.PLAYER_UNLOADED, source)
-	TriggerEvent(OPX.Events.Internal.PLAYER_UNLOADED, source, player.PlayerData)
 
 	local saved = OPX.Save(player, true)
 	OPX.Logger.player(player, 'character.logout', 'logged out')

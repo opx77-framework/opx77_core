@@ -2,7 +2,9 @@
 
 --- Records the account behind a session and sends its living characters, as summaries, on
 --- `OPX.Events.Client.CHARACTERS`. Cooled per source on its own `roster` key, except for a
---- send already rate limited by its caller, which neither is cooled nor cools. Coroutine only.
+--- send already rate limited by its caller, which neither is cooled nor cools. Sends nothing,
+--- and still answers the summaries, when a character got loaded during its reads.
+--- Coroutine only.
 ---@param source Source
 ---@param pushed? boolean true for a send already rate limited by its caller
 ---@return Result ok value is a list of CharacterSummary

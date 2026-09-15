@@ -72,6 +72,7 @@ function OPX.SendCharacters(source, pushed)
 	local list = characters.value
 	local summaries = {}
 	for i = 1, #list do summaries[i] = toSummary(list[i]) end
+	if OPX.Players[source] then return Result.ok(summaries) end
 
 	session.charactersSent = true
 	TriggerClientEvent(OPX.Events.Client.CHARACTERS, source, {

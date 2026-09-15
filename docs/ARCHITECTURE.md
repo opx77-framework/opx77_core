@@ -857,6 +857,13 @@ part ; s'il refroidissait, le `READY` du client une seconde plus tard serait éc
 un renvoi après création écarté par le `READY` qui le précède laissait `opx77_charcreator`
 attendre 20 s puis rouvrir le formulaire, dont un nouvel envoi créait un second personnage.
 
+**Pas de roster sur un personnage chargé.** `OPX.SendCharacters` relit `OPX.Players` après ses
+deux lectures en base et n'envoie rien si un personnage a été chargé entre-temps : il répond
+quand même les résumés, que `/opx77.characters` affiche. Pendant un `/opx77.select`,
+`opx77_charselector` redemande le roster dès le déchargement ; son `READY` ne voit alors aucun
+joueur, et un roster arrivé après `playerLoaded` rouvrait l'écran de sélection, sa caméra et son
+verrou de contrôles sur un personnage en jeu.
+
 **Le résumé.** `toSummary` n'envoie volontairement pas l'entité entière : l'argent, les
 métadonnées et la position stockée ne regardent personne tant qu'un personnage n'est pas
 chargé, pas même le titulaire du compte.

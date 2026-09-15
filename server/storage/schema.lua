@@ -2,11 +2,11 @@
 --- the matching `sql/` file and the two are edited together -- see README, "The schema".
 
 OPX.Schema = {
-  {
-    name = "0001_users",
-    file = "sql/users.sql",
-    statements = {
-      [[
+	{
+		name = '0001_users',
+		file = 'sql/users.sql',
+		statements = {
+			[[
 CREATE TABLE IF NOT EXISTS opx77_users (
     user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
     display_name VARCHAR(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL DEFAULT '',
@@ -14,14 +14,14 @@ CREATE TABLE IF NOT EXISTS opx77_users (
     last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB
       ]],
-    },
-  },
+		},
+	},
 
-  {
-    name = "0002_characters",
-    file = "sql/characters.sql",
-    statements = {
-      [[
+	{
+		name = '0002_characters',
+		file = 'sql/characters.sql',
+		statements = {
+			[[
 CREATE TABLE IF NOT EXISTS opx77_characters (
     citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
     user_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -44,14 +44,14 @@ CREATE TABLE IF NOT EXISTS opx77_characters (
         ON DELETE CASCADE
 ) ENGINE=InnoDB
       ]],
-    },
-  },
+		},
+	},
 
-  {
-    name = "0003_character_groups",
-    file = "sql/character_groups.sql",
-    statements = {
-      [[
+	{
+		name = '0003_character_groups',
+		file = 'sql/character_groups.sql',
+		statements = {
+			[[
 CREATE TABLE IF NOT EXISTS opx77_character_groups (
     citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
     group_type ENUM('job', 'gang') NOT NULL,
@@ -65,14 +65,14 @@ CREATE TABLE IF NOT EXISTS opx77_character_groups (
         ON DELETE CASCADE
 ) ENGINE=InnoDB
       ]],
-    },
-  },
+		},
+	},
 
-  {
-    name = "0004_vehicles",
-    file = "sql/vehicles.sql",
-    statements = {
-      [[
+	{
+		name = '0004_vehicles',
+		file = 'sql/vehicles.sql',
+		statements = {
+			[[
 CREATE TABLE IF NOT EXISTS opx77_vehicles (
     plate VARCHAR(12) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
     citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -92,14 +92,14 @@ CREATE TABLE IF NOT EXISTS opx77_vehicles (
         ON DELETE CASCADE
 ) ENGINE=InnoDB
       ]],
-    },
-  },
+		},
+	},
 
-  {
-    name = "0005_inventories",
-    file = "sql/inventories.sql",
-    statements = {
-      [[
+	{
+		name = '0005_inventories',
+		file = 'sql/inventories.sql',
+		statements = {
+			[[
 CREATE TABLE IF NOT EXISTS opx77_inventories (
     id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
     kind VARCHAR(32) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
@@ -121,14 +121,14 @@ CREATE TABLE IF NOT EXISTS opx77_inventories (
         ON DELETE CASCADE
 ) ENGINE=InnoDB
       ]],
-    },
-  },
+		},
+	},
 
-  {
-    name = "0006_inventory_items",
-    file = "sql/inventory_items.sql",
-    statements = {
-      [[
+	{
+		name = '0006_inventory_items',
+		file = 'sql/inventory_items.sql',
+		statements = {
+			[[
 CREATE TABLE IF NOT EXISTS opx77_inventory_items (
     inventory_id INT UNSIGNED NOT NULL,
     slot SMALLINT UNSIGNED NOT NULL,
@@ -142,14 +142,14 @@ CREATE TABLE IF NOT EXISTS opx77_inventory_items (
         ON DELETE CASCADE
 ) ENGINE=InnoDB
       ]],
-    },
-  },
+		},
+	},
 
-  {
-    name = "0007_character_clothing",
-    file = "sql/character_clothing.sql",
-    statements = {
-      [[
+	{
+		name = '0007_character_clothing',
+		file = 'sql/character_clothing.sql',
+		statements = {
+			[[
 CREATE TABLE IF NOT EXISTS opx77_character_clothing (
     citizen_id VARCHAR(16) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
     clothing JSON NOT NULL,
@@ -159,9 +159,9 @@ CREATE TABLE IF NOT EXISTS opx77_character_clothing (
         ON DELETE CASCADE
 ) ENGINE=InnoDB
       ]],
-    },
-    -- A look is not worth locking every player out for: a failure is logged with this line and
-    -- retried at the next start, and nothing else refuses to boot.
-    optional = "clothing is neither restored nor saved until it is applied",
-  },
+		},
+		-- A look is not worth locking every player out for: a failure is logged with this line and
+		-- retried at the next start, and nothing else refuses to boot.
+		optional = 'clothing is neither restored nor saved until it is applied',
+	},
 }

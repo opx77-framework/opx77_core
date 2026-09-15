@@ -20,8 +20,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA = os.path.join(ROOT, "server", "storage", "schema.lua")
 
 ENTRY = re.compile(
-    r'name\s*=\s*"(?P<name>[^"]+)"\s*,\s*'
-    r'file\s*=\s*"(?P<file>[^"]+)"\s*,\s*'
+    r'name\s*=\s*["\x27](?P<name>[^"\x27]+)["\x27]\s*,\s*'
+    r'file\s*=\s*["\x27](?P<file>[^"\x27]+)["\x27]\s*,\s*'
     r'statements\s*=\s*\{(?P<statements>.*?)\n\s*\}\s*,',
     re.S,
 )

@@ -36,15 +36,35 @@ local recent = {}
 local LEDGER_PREFIXES = { 'money.', 'character.' }
 
 --- @author DemiAutomatic
+--- @method span
+--- @description Byte length of the first characters, bounded at four bytes each.
+--- @param text {string}
+--- @param maximum {integer} Characters to keep.
+--- @returns {integer}
+local function span(text, maximum)
+	local size = math.min(#text, maximum * 4)
+	local characters = 0
+	for index = 1, size do
+		local byte = text:byte(index)
+		if byte < 0x80 or byte > 0xBF then
+			if characters >= maximum then return index - 1 end
+			characters = characters + 1
+		end
+	end
+	return size
+end
+
+--- @author DemiAutomatic
 --- @method bounded
 --- @description Turns a value into text without control characters, truncated.
 --- @param value {any}
---- @param maximum {integer}
+--- @param maximum {integer} Characters to keep.
 --- @returns {string}
 local function bounded(value, maximum)
 	local text = tostring(value or '')
 	text = text:gsub('[%c]', ' ')
-	if #text > maximum then text = text:sub(1, maximum) .. '...' end
+	local cut = span(text, maximum)
+	if cut < #text then text = text:sub(1, cut) .. '...' end
 	return text
 end
 

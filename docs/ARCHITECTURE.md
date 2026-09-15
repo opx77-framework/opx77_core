@@ -535,7 +535,9 @@ son seul support : chaque entrée est une ligne `[audit] event=... severity=... 
 player=... message="..." data=...`, toujours de la même forme pour qu'un `grep` la retrouve.
 
 - **Tout peut venir d'un client.** Le message et les données sont bornés à `MAX_MESSAGE`
-  (200 caractères) et débarrassés de leurs caractères de contrôle. `OPX.Logger.safe` est publiée
+  (200 caractères) et débarrassés de leurs caractères de contrôle. La coupe tombe entre deux
+  caractères (`span` compte les octets de tête UTF-8) : couper par octets pouvait séparer un
+  caractère multi-octets et laisser de l'UTF-8 invalide dans la ligne. `OPX.Logger.safe` est publiée
   pour cette raison : un saut de ligne dans un texte choisi par un client forge une ligne de
   journal entière, attribuée à la ressource que l'attaquant nomme.
 - **Les répétitions sont regroupées.** Une entrée identique (même événement, même propriétaire)

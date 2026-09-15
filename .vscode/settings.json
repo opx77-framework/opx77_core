@@ -7,8 +7,8 @@
   "[lua]": {
     "editor.defaultFormatter": "sumneko.lua",
     "editor.formatOnSave": true,
-    "editor.tabSize": 2,
-    "editor.rulers": [100]
+    "editor.insertSpaces": false,
+    "editor.tabSize": 4
   },
 
   // open77.lua is a declarative manifest, not a script: the language server

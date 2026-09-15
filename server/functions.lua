@@ -113,7 +113,18 @@ local function repeated(source, text)
 	if bucket[text] and now - bucket[text] < ANSWER_DEDUPE_MS then return true end
 	local count = 0
 	for _ in pairs(bucket) do count = count + 1 end
-	if count >= 32 then bucket = {}; lastAnswer[source] = bucket end
+	if count >= 32 then
+		local oldestKey, oldestAt
+		for key, at in pairs(bucket) do
+			if now - at >= ANSWER_DEDUPE_MS then
+				bucket[key] = nil
+				count = count - 1
+			elseif oldestAt == nil or at < oldestAt then
+				oldestKey, oldestAt = key, at
+			end
+		end
+		if count >= 32 then bucket[oldestKey] = nil end
+	end
 	bucket[text] = now
 	return false
 end

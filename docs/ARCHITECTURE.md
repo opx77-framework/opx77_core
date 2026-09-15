@@ -637,8 +637,11 @@ attente qu'à sa réception : un second refus identique avalé laissait le séle
 jusqu'à son délai de 20 s. Chaque requête est déjà refroidie par opération à sa porte, donc un
 refus coûte au plus un petit événement par requête admise.
 
-La table d'un joueur est bornée : à 32 textes elle est vidée, sans quoi un client qui provoque un
-code nouveau à chaque message la ferait grossir pour toute la session.
+La table d'un joueur est bornée à 32 textes, sans quoi un client qui provoque un texte nouveau à
+chaque message la ferait grossir pour toute la session. À 32, les fenêtres déjà fermées sont
+retirées ; s'il en reste 32, seule la plus ancienne l'est. Vider la table entière perdait les
+fenêtres encore ouvertes, et un toast identique repartait avant ses 2 000 ms. Les clés retirées
+pendant le parcours sont celles que `pairs` vient de rendre, ce que Lua permet.
 
 ## Les délais par joueur
 
@@ -1396,8 +1399,6 @@ réserve, même source).
 - `OPX.GetPlayersByJob` / `OPX.GetPlayersByGang` passent par `OPX.GetPlayers`, qui peut évincer un
   emplacement périmé ; l'éviction ne cède pas la main (la sauvegarde part sur un thread), mais une
   lecture « en mémoire » peut ainsi déclencher une déconnexion.
-- La fenêtre de réponses d'un joueur est vidée entière à 32 textes : les fenêtres encore actives
-  sont perdues avec les autres, et une réponse identique peut repartir avant ses 2 000 ms.
 - `opx77:server:spawnVehicle` en échec envoie à la fois un refus (`OPX.Refuse`) et un toast
   d'erreur (`OPX.NotifyLocale`) avec le même code ; `storeVehicle` n'envoie que le refus.
 - `OPX.Vehicles.Give` lève `vehicle.plateExhausted` avec la dernière plaque tirée en détail, et

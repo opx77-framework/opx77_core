@@ -183,13 +183,16 @@ function OPX.SaveAppearance(identifier, snapshot)
 		return Result.err('appearance.tooLarge', tostring(#encoded))
 	end
 
-	local written = OPX.Storage.Players.saveAppearance(data.citizenId, canonical)
-	if not written.ok then return written end
-
+	local previous = data.appearance
 	data.appearance = canonical
-	player.Functions.UpdatePlayerData()
+	local written = OPX.Storage.Players.saveAppearance(data.citizenId, canonical)
+	if not written.ok then
+		if data.appearance == canonical then data.appearance = previous end
+		return written
+	end
 
-	if not player.Offline then
+	if not player.Offline and OPX.Players[data.source] == player then
+		player.Functions.UpdatePlayerData()
 		TriggerClientEvent(OPX.Events.Client.APPEARANCE_UPDATE, data.source, canonical)
 	end
 	TriggerEvent(OPX.Events.Internal.APPEARANCE_CHANGE, data.source, data.citizenId, canonical)
@@ -218,7 +221,7 @@ end
 
 --- @author DemiAutomatic
 --- @event opx77:server:saveAppearance
---- @description Stores the face opx77_appearance captured for the connection's character.
+--- @description Stores the face captured for the connection's character, refusing a stale save.
 --- @param payload {any}
 RegisterNetEvent(OPX.Events.Server.SAVE_APPEARANCE, function(payload)
 	local src = tonumber(source)
@@ -231,9 +234,15 @@ RegisterNetEvent(OPX.Events.Server.SAVE_APPEARANCE, function(payload)
 		return OPX.Refuse(src, 'error.tooFast', operation)
 	end
 
+	local player = OPX.GetPlayer(src)
+	if not player then return OPX.Refuse(src, 'error.notLoggedIn', operation) end
+	if payload.citizenId ~= nil and payload.citizenId ~= player.PlayerData.citizenId then
+		return OPX.Refuse(src, 'appearance.stale', operation)
+	end
+
 	local snapshot = payload.snapshot or payload
 	CreateThread(function()
-		local saved = OPX.SaveAppearance(src, snapshot)
+		local saved = OPX.SaveAppearance(player, snapshot)
 		if not saved.ok then
 			Open77.log.warn(('[appearance] %d sent an unusable face: %s (%s)')
 				:format(src, tostring(saved.error), tostring(saved.detail)))

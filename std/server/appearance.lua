@@ -25,8 +25,9 @@ function OPX.Appearance.canonical(value) end
 ---@return boolean
 function OPX.Appearance.same(left, right) end
 
---- Validates a captured snapshot, writes it to `opx77_characters.appearance`, puts it on
---- `PlayerData.appearance` and publishes it. Coroutine only.
+--- Validates a captured snapshot, puts it on `PlayerData.appearance`, writes it to
+--- `opx77_characters.appearance` (restoring the previous face if the write fails) and publishes
+--- it to the client only while that Player is still the one loaded on its source. Coroutine only.
 ---@param identifier Player|Source|CitizenId
 ---@param snapshot any straight off the wire
 ---@return Result ok value is the canonical snapshot

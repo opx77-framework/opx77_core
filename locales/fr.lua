@@ -15,6 +15,7 @@ OPX.Locale.register('fr', {
 
 	['appearance.invalid'] = "Cette apparence n'a pas pu être lue.",
 	['appearance.tooLarge'] = 'Cette apparence est trop volumineuse pour être enregistrée.',
+	['appearance.stale'] = 'Cette apparence appartient à un autre personnage.',
 
 	['clothing.invalid'] = "Ces vêtements n'ont pas pu être lus.",
 	['clothing.tooLarge'] = 'Ces vêtements sont trop nombreux pour être enregistrés.',

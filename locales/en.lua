@@ -15,6 +15,7 @@ OPX.Locale.register('en', {
 
 	['appearance.invalid'] = 'That appearance could not be read.',
 	['appearance.tooLarge'] = 'That appearance is too large to store.',
+	['appearance.stale'] = 'That appearance belongs to another character.',
 
 	['clothing.invalid'] = 'Those clothes could not be read.',
 	['clothing.tooLarge'] = 'Those clothes are too many to store.',

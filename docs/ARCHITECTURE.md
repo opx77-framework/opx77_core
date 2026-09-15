@@ -1150,8 +1150,17 @@ est une ressource cliente qui capture un instantané et l'envoie ici ; rien d'au
 - Dans `OPX.SaveAppearance`, la comparaison `OPX.Appearance.same` vient avant l'encodage : deux
   instantanés canoniques identiques s'encodent aux mêmes octets, donc le contrôle de taille ne
   peut pas répondre différemment pour un visage déjà stocké.
-- Le personnage écrit par `opx77:server:saveAppearance` vient de la connexion, jamais de la
-  charge utile.
+- Le personnage écrit par `opx77:server:saveAppearance` vient de la connexion, résolu avant le
+  thread, jamais de la charge utile. L'identifiant citoyen de la charge utile ne sert qu'à refuser
+  (`appearance.stale`) un visage capturé pour le personnage d'avant ; il reste optionnel, pour
+  qu'un `opx77_appearance` qui ne l'envoie pas encore continue d'enregistrer.
+- `PlayerData.appearance` est posé **avant** l'écriture, et remis à l'ancien visage si elle
+  échoue (sauf si un autre visage l'a remplacé entre-temps) : la sauvegarde de déconnexion
+  réécrit la colonne depuis la mémoire, et, lancée pendant l'attente, elle écrasait sinon le
+  visage qui venait d'être enregistré.
+- L'écriture cède la main : la diffusion au client (`SET_PLAYER_DATA`, `APPEARANCE_UPDATE`)
+  n'a lieu que si ce Player est toujours celui chargé sur la source
+  (`OPX.Players[data.source] == player`), comme pour les vêtements.
 
 ## Les vêtements
 

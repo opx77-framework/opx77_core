@@ -273,14 +273,17 @@ resource acting on its own authority.
 | `opx77:server:createCharacter` | `{ firstName, lastName, origin, gender, birthDate }` | creates one |
 | `opx77:server:deleteCharacter` | `{ citizenId }` | soft-deletes one |
 | `opx77:server:reportPosition` | `{ heading }` | a heading hint; x/y/z are re-derived server-side |
-| `opx77:server:saveAppearance` | `{ snapshot }` | validates and stores a captured face |
+| `opx77:server:saveAppearance` | `{ snapshot, citizenId? }` | validates and stores a captured face |
 | `opx77:server:saveClothing` | `{ citizenId, clothing }` | validates and stores what the character wears |
 | `opx77:server:spawnVehicle` / `opx77:server:storeVehicle` | `{ plate }` | brings a car out, or puts it away |
 
 `opx77:server:saveAppearance` takes a canonical snapshot: `schemaVersion = 1`, a `gameBuild`
 listed in `APPEARANCE.GAME_BUILDS`, a 64-hex `catalogDigest`, a `gender` engine hash
 (`0x` + 16 hex), and a dense `options` array of 1–256 `{ part, name, value, choices }` entries.
-Anything else is refused with `appearance.invalid` and a code naming the field.
+Anything else is refused with `appearance.invalid` and a code naming the field. The row written is
+the connection's character: `citizenId` never selects it, and a save naming another one —
+captured before a character switch — is refused with `appearance.stale`. A save without
+`citizenId` is still accepted. The cooldown is 2000 ms, on its own key.
 
 `opx77:server:saveClothing` takes `clothing = { schemaVersion = 1, equipment, wardrobe }`:
 `equipment` names only the nine slots (`Head`, `Face`, `InnerChest`, `OuterChest`, `Legs`,

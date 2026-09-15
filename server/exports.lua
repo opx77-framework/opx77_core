@@ -67,8 +67,8 @@ end
 ---@param name string
 ---@param scope string|nil
 ---@param fn fun(caller: table, ...): table
-local function publish(name, scope, fn)
-	exports(name, function(...)
+local function guard(name, scope, fn)
+	return function(...)
 		local caller = callerOf()
 		if caller == nil then return refused('export.callerDenied') end
 		if not OPX.Booted then return refused('core.booting') end
@@ -89,7 +89,7 @@ local function publish(name, scope, fn)
 		end
 		if type(answer) ~= 'table' then return refused('error.unavailable') end
 		return sized(answer)
-	end)
+	end
 end
 
 -- ---------------------------------------------------------------------------
@@ -121,7 +121,7 @@ end
 -- Reads
 -- ---------------------------------------------------------------------------
 
-publish('GetVersion', nil, function(caller)
+exports('GetVersion', guard('GetVersion', nil, function(caller)
 	local scopes = {}
 	local entry = type(Config.CALLERS) == 'table' and Config.CALLERS[caller.name] or nil
 	if type(entry) == 'table' and type(entry.scopes) == 'table' then
@@ -131,7 +131,7 @@ publish('GetVersion', nil, function(caller)
 		table.sort(scopes)
 	end
 	return { ok = true, version = OPX.VERSION, exports = CONTRACT, scopes = scopes }
-end)
+end))
 
 --- The identity of a connection, from the session the core keeps for it.
 ---@param source Source
@@ -156,7 +156,7 @@ end
 
 --- `target` is a player id, which is online only, or a citizen id, which is also found when
 --- the character is offline: then `online` and `loaded` are false and `source` is absent.
-publish('GetIdentity', nil, function(_, target)
+exports('GetIdentity', guard('GetIdentity', nil, function(_, target)
 	if type(target) == 'number' then
 		local source = integer(target, 1, 2147483647)
 		if not source then return refused('export.badArgument') end
@@ -182,16 +182,16 @@ publish('GetIdentity', nil, function(_, target)
 		online = false,
 		loaded = false,
 	}
-end)
+end))
 
 --- Which owned vehicle a runtime vehicle id is. `plate` is absent for a vehicle the core did
 --- not spawn, which has no row to key anything durable on.
-publish('GetVehiclePlate', nil, function(_, vehicleId)
+exports('GetVehiclePlate', guard('GetVehiclePlate', nil, function(_, vehicleId)
 	local id = integer(vehicleId, 1, math.maxinteger)
 	if not id then return refused('export.badArgument') end
 	local plate, citizenId = OPX.Vehicles.PlateOf(id)
 	return { ok = true, plate = plate, citizenId = citizenId }
-end)
+end))
 
 -- ---------------------------------------------------------------------------
 -- The change cursor: what happened to characters, for resources whose VM cannot hear
@@ -235,7 +235,7 @@ end)
 --- Events after `since`, oldest first, at most EVENTS_PER_READ of them. `reset` says the
 --- caller's cursor is not this journal's: the core reloaded, or the ring moved past it, and
 --- the caller must re-read whatever it keeps instead of trusting the events alone.
-publish('GetChanges', nil, function(_, since)
+exports('GetChanges', guard('GetChanges', nil, function(_, since)
 	since = integer(since, 0, math.maxinteger)
 	if since == nil then return refused('export.badArgument') end
 
@@ -260,7 +260,7 @@ publish('GetChanges', nil, function(_, since)
 		generation = GetCurrentResourceGeneration(),
 		events = events,
 	}
-end)
+end))
 
 -- ---------------------------------------------------------------------------
 -- Inventory storage, scope `inventory`. The core stores what it is handed; what may go in a
@@ -284,7 +284,7 @@ end
 
 --- Finds or creates a container. The size is used only when it is created; an existing one
 --- answers the size it was created with.
-publish('InventoryEnsure', 'inventory', function(_, kind, owner, options)
+exports('InventoryEnsure', guard('InventoryEnsure', 'inventory', function(_, kind, owner, options)
 	kind = token(kind, 32, KIND)
 	owner = token(owner, 64, OWNER)
 	local slots, maxWeight = sizeOf(options)
@@ -326,11 +326,11 @@ publish('InventoryEnsure', 'inventory', function(_, kind, owner, options)
 		maxWeight = header.maxWeight,
 		created = ensured.value.created,
 	}
-end)
+end))
 
 --- One page of a container's stacks after slot `after`, trimmed to what fits an answer.
 --- `nextAfter` is present while there may be more: pass it back as `after`.
-publish('InventoryRead', 'inventory', function(_, id, after)
+exports('InventoryRead', guard('InventoryRead', 'inventory', function(_, id, after)
 	id = integer(id, 1, 4294967295)
 	after = after == nil and 0 or integer(after, 0, 65535)
 	if not id or not after then return refused('export.badArgument') end
@@ -368,7 +368,7 @@ publish('InventoryRead', 'inventory', function(_, id, after)
 	end
 	if #list == page then answer.nextAfter = list[#list].slot end
 	return answer
-end)
+end))
 
 --- caller name -> token -> { atMs, containers = { [id] = rows }, order = { id, ... } }. A save
 --- is staged across calls, because one argument carries at most 48 KiB, and committed as one
@@ -409,7 +409,7 @@ end
 
 --- Appends stacks to a container's staged save. The first stage of a container under a token
 --- empties it, so a container staged with no rows is saved empty.
-publish('InventoryStage', 'inventory', function(caller, key, id, rows)
+exports('InventoryStage', guard('InventoryStage', 'inventory', function(caller, key, id, rows)
 	key = token(key, 32, TOKEN)
 	id = integer(id, 1, 4294967295)
 	if not key or not id or type(rows) ~= 'table' or #rows > Limits.MAX_SLOTS then
@@ -453,11 +453,11 @@ publish('InventoryStage', 'inventory', function(caller, key, id, rows)
 	end
 	stage.atMs = OPX.Now()
 	return { ok = true, staged = #list }
-end)
+end))
 
 --- Writes everything staged under a token as one transaction, then forgets the token. A
 --- failed commit writes nothing; the caller stages again and retries.
-publish('InventoryCommit', 'inventory', function(caller, key)
+exports('InventoryCommit', guard('InventoryCommit', 'inventory', function(caller, key)
 	key = token(key, 32, TOKEN)
 	if not key then return refused('export.badArgument') end
 	sweepStaged()
@@ -478,9 +478,9 @@ publish('InventoryCommit', 'inventory', function(caller, key)
 		return refused('inventory.saveFailed')
 	end
 	return { ok = true, saved = #containers }
-end)
+end))
 
-publish('InventoryResize', 'inventory', function(_, id, slots, maxWeight)
+exports('InventoryResize', guard('InventoryResize', 'inventory', function(_, id, slots, maxWeight)
 	id = integer(id, 1, 4294967295)
 	slots = integer(slots, 1, Limits.MAX_SLOTS)
 	maxWeight = integer(maxWeight, 0, Limits.MAX_WEIGHT)
@@ -488,25 +488,25 @@ publish('InventoryResize', 'inventory', function(_, id, slots, maxWeight)
 	local resized = Store.resize(id, slots, maxWeight)
 	if not resized.ok then return refused('error.unavailable') end
 	return { ok = true }
-end)
+end))
 
-publish('InventoryDelete', 'inventory', function(_, id)
+exports('InventoryDelete', guard('InventoryDelete', 'inventory', function(_, id)
 	id = integer(id, 1, 4294967295)
 	if not id then return refused('export.badArgument') end
 	local deleted = Store.delete(id)
 	if not deleted.ok then return refused('error.unavailable') end
 	return { ok = true }
-end)
+end))
 
 --- Which containers hold an item, the largest stacks first, at most 50.
-publish('InventoryHolders', 'inventory', function(_, name, limit)
+exports('InventoryHolders', guard('InventoryHolders', 'inventory', function(_, name, limit)
 	name = token(name, 48, ITEM)
 	limit = limit == nil and 20 or integer(limit, 1, 50)
 	if not name or not limit then return refused('export.badArgument') end
 	local rows = Store.holders(name, limit)
 	if not rows.ok then return refused('error.unavailable') end
 	return { ok = true, holders = rows.value }
-end)
+end))
 
 Open77.log.info('[exports] server exports published: GetVersion, GetIdentity, GetVehiclePlate, ' ..
 	'GetChanges, InventoryEnsure, InventoryRead, InventoryStage, InventoryCommit, ' ..

@@ -114,22 +114,6 @@ local api = Open77.routingBuckets
 local prepared = {}
 
 --- @author DemiAutomatic
---- @method OPX.Buckets.enabled
---- @description Answers whether players choosing a character are isolated at all.
---- @returns {boolean}
-function OPX.Buckets.enabled()
-	return isolate
-end
-
---- @author DemiAutomatic
---- @method OPX.Buckets.world
---- @description Answers the bucket a character goes to by default.
---- @returns {integer}
-function OPX.Buckets.world()
-	return world
-end
-
---- @author DemiAutomatic
 --- @method OPX.Buckets.selectionOf
 --- @description Answers a player's own selection bucket, or nil.
 --- @param source {Source}

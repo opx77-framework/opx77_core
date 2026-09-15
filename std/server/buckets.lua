@@ -2,14 +2,6 @@
 
 OPX.Buckets = {}
 
---- Whether players choosing a character are isolated at all on this server.
----@return boolean
-function OPX.Buckets.enabled() end
-
---- The bucket a character goes to when nothing else names one, `ENTRY.BUCKET.WORLD`.
----@return integer
-function OPX.Buckets.world() end
-
 --- A player's own selection bucket, BASE + id, or nil when isolation is off or the id cannot
 --- have one.
 ---@param source Source

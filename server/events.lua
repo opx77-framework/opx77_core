@@ -79,7 +79,7 @@ RegisterNetEvent(Events.Server.READY, function()
 
 	if not OPX.Lifecycle.isReady(src) then OPX.Buckets.isolate(src, 'ready') end
 
-	CreateThread(function() OPX.SendCharacters(src) end)
+	CreateThread(function() OPX.SendCharacters(src, true) end)
 end)
 
 --- @author DemiAutomatic
@@ -136,7 +136,7 @@ RegisterNetEvent(Events.Server.CREATE_CHARACTER, function(payload)
 		OPX.NotifyLocale(src, 'character.created',
 			{ citizenId = created.value.citizenId }, 'success')
 
-		OPX.SendCharacters(src)
+		OPX.SendCharacters(src, true)
 	end)
 end)
 
@@ -164,7 +164,7 @@ RegisterNetEvent(Events.Server.DELETE_CHARACTER, function(payload)
 			return
 		end
 		OPX.NotifyLocale(src, 'character.deleted', nil, 'success')
-		OPX.SendCharacters(src)
+		OPX.SendCharacters(src, true)
 	end)
 end)
 

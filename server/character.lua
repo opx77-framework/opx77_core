@@ -49,7 +49,7 @@ end
 --- @method OPX.SendCharacters
 --- @description Records the account and sends its character roster to the client.
 --- @param source {Source}
---- @param pushed {boolean|nil} The core's own send on connect.
+--- @param pushed {boolean|nil} Already rate limited by its caller.
 --- @returns {Result}
 function OPX.SendCharacters(source, pushed)
 	if not pushed and OPX.Cooling(source, 'roster', 2000) then

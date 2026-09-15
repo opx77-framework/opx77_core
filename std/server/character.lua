@@ -1,10 +1,10 @@
 ---@meta
 
 --- Records the account behind a session and sends its living characters, as summaries, on
---- `OPX.Events.Client.CHARACTERS`. Cooled per source on its own `roster` key, except for the
---- core's own push on connect, which neither is cooled nor cools. Coroutine only.
+--- `OPX.Events.Client.CHARACTERS`. Cooled per source on its own `roster` key, except for a
+--- send already rate limited by its caller, which neither is cooled nor cools. Coroutine only.
 ---@param source Source
----@param pushed? boolean true for the core's own send on connect
+---@param pushed? boolean true for a send already rate limited by its caller
 ---@return Result ok value is a list of CharacterSummary
 function OPX.SendCharacters(source, pushed) end
 

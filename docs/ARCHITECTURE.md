@@ -849,11 +849,13 @@ Tout ce qui touche au roster, à la création, à la suppression et à la sélec
 personnages vivants. L'appeler deux fois est sans danger : un rechargement vide le roster de
 cette VM et le client se réannonce. Le refroidissement (clé `roster`, 2 s) est posé ici et non
 à une porte d'entrée, parce que la fonction est aussi atteinte par la commande libre
-`/opx77.characters`. L'envoi que le core fait lui-même à la connexion (`pushed`) n'est ni
-refroidi ni refroidissant : il part avant que les ressources du client tournent et n'arrive
-donc généralement nulle part ; s'il refroidissait, le `READY` du client une seconde plus tard
-serait écarté avec lui, et le roster n'arriverait qu'après une nouvelle tentative, le monde déjà
-chargé.
+`/opx77.characters`. Un envoi déjà limité par son appelant (`pushed`) n'est ni refroidi ni
+refroidissant : l'envoi du core à la connexion, le `READY` du client (clé `ready`) et le renvoi
+qui suit une création ou une suppression (clés `create.request`, `delete.request`). L'envoi à la
+connexion part avant que les ressources du client tournent et n'arrive donc généralement nulle
+part ; s'il refroidissait, le `READY` du client une seconde plus tard serait écarté avec lui. Et
+un renvoi après création écarté par le `READY` qui le précède laissait `opx77_charcreator`
+attendre 20 s puis rouvrir le formulaire, dont un nouvel envoi créait un second personnage.
 
 **Le résumé.** `toSummary` n'envoie volontairement pas l'entité entière : l'argent, les
 métadonnées et la position stockée ne regardent personne tant qu'un personnage n'est pas

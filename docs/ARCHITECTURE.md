@@ -623,11 +623,16 @@ dont le compte a changé. Les emplacements périmés sont collectés pendant le 
 
 ## La suppression des réponses répétées
 
-`OPX.Notify` et `OPX.Refuse` partagent une fenêtre par joueur (`repeated`, `lastAnswer`) :
-un texte identique envoyé au même joueur dans les 2 000 ms (`ANSWER_DEDUPE_MS`) est avalé. Seule
-une répétition exacte l'est : deux refus différents sont deux choses que le joueur doit apprendre.
-Pour `OPX.Refuse`, l'opération fait partie de la clé : deux requêtes refusées pour la même raison
-sont deux réponses, et les fusionner laisserait sans réponse le client qui n'a pas été prévenu.
+`OPX.Notify` tient une fenêtre par joueur (`repeated`, `lastAnswer`) : un toast identique
+(même type, même texte) envoyé au même joueur dans les 2 000 ms (`ANSWER_DEDUPE_MS`) est avalé.
+Seule une répétition exacte l'est : deux toasts différents sont deux choses que le joueur doit
+apprendre.
+
+`OPX.Refuse` n'y passe pas. Un refus est la réponse à une requête, et les clients
+(`opx77_charselector`, `opx77_charcreator`, `opx77_appearance`) ne libèrent leur requête en
+attente qu'à sa réception : un second refus identique avalé laissait le sélecteur verrouillé
+jusqu'à son délai de 20 s. Chaque requête est déjà refroidie par opération à sa porte, donc un
+refus coûte au plus un petit événement par requête admise.
 
 La table d'un joueur est bornée : à 32 textes elle est vidée, sans quoi un client qui provoque un
 code nouveau à chaque message la ferait grossir pour toute la session.
@@ -640,9 +645,9 @@ une frontière de sécurité, les vérifications de propriété de `server/chara
 `OPX.Cooling` enregistre la tentative qu'il laisse passer ; la console (source 0) n'est jamais
 refroidie.
 
-`OPX.ForgetCooldowns` vide, au départ d'un joueur, ses délais **et** sa fenêtre de réponses : un
+`OPX.ForgetCooldowns` vide, au départ d'un joueur, ses délais **et** sa fenêtre de toasts : un
 identifiant de joueur est recyclé, et une fenêtre laissée derrière refuserait l'action suivante du
-prochain joueur à porter cet identifiant, ou avalerait son premier refus.
+prochain joueur à porter cet identifiant, ou avalerait son premier toast.
 
 ## Les portes réseau
 

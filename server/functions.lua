@@ -89,12 +89,12 @@ end
 
 --- @author DemiAutomatic
 --- @type {integer}
---- @description Milliseconds an identical answer to one player is suppressed.
+--- @description Milliseconds an identical toast to one player is suppressed.
 local ANSWER_DEDUPE_MS = 2000
 
 --- @author DemiAutomatic
 --- @type {table<integer, table<string, integer>>}
---- @description When each answer text last went to each player.
+--- @description When each toast text last went to each player.
 local lastAnswer = {}
 
 --- @author DemiAutomatic
@@ -246,7 +246,6 @@ function OPX.Refuse(source, code, operation)
 	if not source or source <= 0 then return end
 	code = OPX.RefusalKey(code)
 	operation = type(operation) == 'string' and operation or 'unknown'
-	if repeated(source, 'refuse:' .. operation .. ':' .. code) then return end
 	TriggerClientEvent(OPX.Events.Client.NOTIFY, source,
 		{ kind = 'error', code = code, operation = operation })
 end

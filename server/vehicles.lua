@@ -108,7 +108,7 @@ function OPX.Vehicles.Give(citizenId, record, options)
 				:format(citizenId, entity.plate, record))
 			return Result.ok(entity)
 		end
-		if not tostring(inserted.detail or ''):find('Duplicate', 1, true) then return inserted end
+		if not tostring(inserted.detail or ''):lower():find('duplicate', 1, true) then return inserted end
 	end
 	return Result.err('vehicle.plateExhausted', entity and entity.plate or '?')
 end

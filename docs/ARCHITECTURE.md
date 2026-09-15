@@ -1210,7 +1210,10 @@ se prouve contre le personnage chargé par la connexion, jamais contre ce que le
   est reconstruit à vide à chaque rechargement.
 - La plaque suit `PLATE_FORMAT` en ASCII majuscule, parce que la colonne est `ascii_bin`. Une
   plaque en double est le seul échec d'insertion qui vaille un nouveau tirage ; tout autre échec
-  vient de la base. L'enregistrement est refusé au-delà de 256 caractères ici, pour une raison
+  vient de la base. Le détail est comparé en minuscules, comme pour un identifiant citoyen dans
+  `OPX.CreateCharacter` : la casse du message dépend du pont et de la version du serveur. Après
+  cinq tirages en double, la réponse est `vehicle.plateExhausted`, la dernière plaque tirée en
+  détail. L'enregistrement est refusé au-delà de 256 caractères ici, pour une raison
   lisible, alors que l'hôte le plafonne aussi.
 - `OPX.Vehicles.PlateOf` ne connaît que les véhicules que le core a fait apparaître : un
   véhicule créé par une autre ressource n'a pas de ligne, et rien de durable ne doit s'y
@@ -1413,6 +1416,3 @@ d'événements du journal d'audit, pas des clés : un joueur ne lit jamais « pa
 - `OPX.GetPlayersByJob` / `OPX.GetPlayersByGang` passent par `OPX.GetPlayers`, qui peut évincer un
   emplacement périmé ; l'éviction ne cède pas la main (la sauvegarde part sur un thread), mais une
   lecture « en mémoire » peut ainsi déclencher une déconnexion.
-- `OPX.Vehicles.Give` lève `vehicle.plateExhausted` avec la dernière plaque tirée en détail, et
-  ne compte que les échecs contenant `Duplicate` (sensible à la casse), alors que
-  `OPX.CreateCharacter` compare `duplicate` en minuscules.

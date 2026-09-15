@@ -36,9 +36,9 @@ local function toEntity(row)
 		garage = row.garage,
 		state = OPX.Math.isFinite(state) and state or Vehicles.STATE.STORED,
 		health = OPX.Math.isFinite(health) and health or 1.0,
-		damage = row.body and json.decode(row.body) or nil,
-		paint = row.paint and json.decode(row.paint) or nil,
-		metadata = row.metadata and json.decode(row.metadata) or {},
+		damage = Storage.Decode(row.body, nil),
+		paint = Storage.Decode(row.paint, nil),
+		metadata = Storage.Decode(row.metadata, {}),
 	}
 end
 

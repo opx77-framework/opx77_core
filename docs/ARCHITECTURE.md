@@ -1337,11 +1337,6 @@ réserve, même source).
 ## Limites connues
 
 - Les bannissements et la file d'attente ne sont pas gérés.
-- `toEntity` de `server/storage/vehicles.lua` décode `body`, `paint` et `metadata` avec
-  `json.decode` sans `pcall`, contrairement au `decode` de `players.lua` et `inventories.lua` : une
-  cellule JSON malformée lève dans `fetchOne` / `fetchByOwner` au lieu d'être absente, ce qui tue
-  le thread appelant (la boucle de sauvegarde des véhicules la rattrape par son `pcall`, pas
-  `OPX.Vehicles.Spawn` ni `Store`).
 - `OPX.Storage.ready` garde sa réponse pour toute la durée de la ressource : une base qui revient
   après le démarrage n'est prise en compte qu'au redémarrage du core.
 - Dans la déclaration des tunables, `CHARACTER_ROWS` et `SELECTION_MS` portent tous deux

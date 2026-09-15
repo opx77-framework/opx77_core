@@ -152,10 +152,10 @@ CreateThread(function()
 
 	local ready = OPX.Storage.ready()
 	if ready then
-		local migrated = OPX.Storage.migrate(OPX.Schema)
-		if not migrated.ok then
-			OPX.BootError = 'migration failed: ' .. tostring(migrated.error)
-			Open77.log.error('[core] refusing to accept logins against an unknown schema')
+		local applied = OPX.Storage.applySchema(OPX.Schema)
+		if not applied.ok then
+			OPX.BootError = 'schema failed: ' .. tostring(applied.detail)
+			Open77.log.error('[core] refusing to accept logins against an incomplete schema')
 		end
 	else
 		OPX.BootError = 'no database'

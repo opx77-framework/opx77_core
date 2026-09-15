@@ -6,10 +6,6 @@ OPX.Clothing = {}
 ---@type integer
 OPX.Clothing.VERSION = 1
 
---- The name of the optional migration that creates `opx77_character_clothing`.
----@type string
-OPX.Clothing.MIGRATION = '0007_character_clothing'
-
 --- A clothing record in canonical form (all nine slots stated, outfit keys "0" to "6", empty
 --- outfits dropped), or nil and a code naming what was wrong with it.
 ---@param value any
@@ -23,10 +19,6 @@ function OPX.Clothing.canonical(value) end
 ---@param right ClothingRecord|false|nil
 ---@return boolean
 function OPX.Clothing.same(left, right) end
-
---- Whether the clothing table exists as far as this run knows: its migration was not skipped.
----@return boolean
-function OPX.Clothing.available() end
 
 --- What `PlayerData.clothing` starts as at login: the record, false when none is stored, or nil
 --- when it could not be read. Never refuses a login. Coroutine only.

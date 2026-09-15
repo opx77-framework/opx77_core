@@ -198,14 +198,6 @@
 ---@field isBoss boolean|nil
 ---@field bankAuth boolean|nil
 
---- One schema migration. Append-only: the runner keys on the name, and an entry that has
---- shipped has already run on live databases.
----@class Migration
----@field name string
----@field file string       the `sql/` file carrying the same statements, for an operator
----@field statements string[]
----@field optional string|nil  set when a failure must not stop the boot: what goes without it
-
 --- Returning false from a hook vetoes the operation; returning nothing allows it. Points the
 --- core triggers: money:beforeAdd, money:beforeRemove, money:beforeSet, paycheck:before.
 ---@class HookPayload

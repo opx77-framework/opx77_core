@@ -4,11 +4,6 @@
 --- is answered as `query-failed`, a missing bridge as `no-database`.
 OPX.Storage = {}
 
---- Optional migrations that failed this run, by name. Never recorded, so the next start tries
---- them again; what reads their tables asks here first.
----@type table<string, boolean>
-OPX.Storage.skipped = {}
-
 --- Runs a statement; the ok value is a list of rows.
 ---@param sql string
 ---@param params? table
@@ -56,8 +51,9 @@ function OPX.Storage.transaction(statements) end
 ---@return string reason
 function OPX.Storage.ready() end
 
---- Applies pending migrations in order, keyed by name. Stops at the first failure of a
---- migration that is not optional (`migration-failed`); the ok value is the number applied.
----@param migrations Migration[]
+--- Runs every `CREATE TABLE IF NOT EXISTS` statement in order and stops at the first failure,
+--- answering `schema-failed` with the table name as the detail; the ok value is the count.
+--- A statement never alters an existing table.
+---@param statements string[]
 ---@return Result
-function OPX.Storage.migrate(migrations) end
+function OPX.Storage.applySchema(statements) end

@@ -29,33 +29,49 @@ Why the code is written the way it is — load order, permissions, invariants, k
   storage for server resources
 - Locales, with every refusal answered as a key a satellite can render
 
-## The schema
+## Install
 
-One file per table in [`sql/`](sql/), which is where an operator reads it:
+1. Put the `opx77_core` folder in the server's resources and let it start (`auto_start true`).
+   It declares no dependency, so it starts on a bare server.
+2. Give the server a database: `database.access` is in the manifest, and every resource holding
+   it talks to the same database with the server's credential. The core needs nothing created by
+   hand — it creates its tables at boot (see below).
+3. Set `DEFAULT_SPAWN` in `config/shared.lua` (run `opx77.here` in game to print one) and review
+   the rest of [Configuration](#configuration).
+4. Start the satellites that draw what the core owns: `opx77_charselector` and
+   `opx77_charcreator` for the character screen, `opx77_appearance` (which also emits the
+   `open77:session:gameplayReady` that opens the readiness gate), and `opx77_notify` for toasts.
 
-| File | Table |
+At boot the log says `[core] opx77_core <version> ready`. Without a database it says
+`... is up but cannot load characters: no database`: the core stays up, the server exports
+answer, and nobody can be logged in until the database is fixed and the core restarted.
+
+## Database
+
+Every table the core owns is created by the core, at every boot, from one ordered list of
+`CREATE TABLE IF NOT EXISTS` statements: `OPX.Schema` in `server/storage/schema.lua`, applied by
+`OPX.Storage.applySchema`. [`sql/schema.sql`](sql/schema.sql) carries the same statements, with a
+comment on each table: it is what an operator reads, and may run by hand on an empty database.
+The Open77 *server* runtime installs no file-reading API — `Open77.resource` is `{ name, state }`
+and the sandbox removes `io`, `os` and `loadfile` — so the core cannot load `sql/` itself, and
+a `.sql` file is not a script a manifest can list either. **The two are edited together.**
+
+| Table | Holds |
 |---|---|
-| `sql/users.sql` | `opx77_users` — one Master account |
-| `sql/characters.sql` | `opx77_characters` — one character, keyed on `citizen_id` |
-| `sql/character_groups.sql` | `opx77_character_groups` — job and gang memberships |
-| `sql/vehicles.sql` | `opx77_vehicles` — owned vehicles, keyed on the plate |
-| `sql/inventories.sql` | `opx77_inventories` — one container: a bag, a stash, a vehicle's trunk or glovebox |
-| `sql/inventory_items.sql` | `opx77_inventory_items` — one item stack in one slot of one container |
-| `sql/character_clothing.sql` | `opx77_character_clothing` — what one character wears |
+| `opx77_users` | one Master account |
+| `opx77_characters` | one character, keyed on `citizen_id` |
+| `opx77_character_groups` | job and gang memberships |
+| `opx77_character_clothing` | what one character wears |
+| `opx77_vehicles` | owned vehicles, keyed on the plate |
+| `opx77_inventories` | one container: a bag, a stash, a vehicle's trunk or glovebox |
+| `opx77_inventory_items` | one item stack in one slot of one container |
 
-`server/storage/schema.lua` carries the same statements and applies them at boot. **The two
-are edited together.** The Open77 *server* runtime installs no file-reading API — `Open77.resource`
-is `{ name, state }` and the sandbox removes `io`, `os` and `loadfile` — so the migration runner
-cannot load `sql/` itself; a `.sql` file is not a script a manifest can list either.
-
-The runner keys on the migration name and skips one a database already has. `sql/` and the Lua
-long strings are byte-identical apart from the trailing `;` and the file's header comment:
-`schema.lua` is what runs, `sql/` is what an operator reads, and neither is generated from the
-other. `python3 tools/check_sql_parity.py` proves it and exits non-zero when the two drift.
-
-A migration marked `optional` does not stop the boot when it fails: the runner logs the failure
-and what goes without it, does not record it, and tries it again at the next start. Only
-`0007_character_clothing` is optional — a look is not worth locking every player out for.
+**There are no migrations.** `CREATE TABLE IF NOT EXISTS` creates a missing table and never
+alters one that exists. While the project is in development, a change to a table ships as a
+change to its statement, and a database created before it has to be dropped (the tables, or the
+whole database) so the core creates it again at the next start. If any statement fails, the boot
+stops there: `OPX.BootError` is `schema failed: <table>`, the log says so, and nobody can be logged
+in — exactly as without a database. `opx77_status` creates its own table in its own resource.
 
 `opx77_characters` carries one nullable JSON column beyond the obvious ones: `appearance`, the
 character's face, written only by `server/appearance.lua`. It travels inside `PlayerData` and is
@@ -74,18 +90,11 @@ the storage exports below; see `opx77_inventory` for everything they mean.
 `opx77_character_clothing` holds one JSON document per character, written only by
 `server/clothing.lua`: the nine equipment slots, the seven wardrobe outfits and the active one,
 in the shape the platform's own presentation service stores. It is a table of its own rather
-than a column beside `appearance`, so a database without it still loads every character and the
-autosave that rewrites a character row never rewrites what it wears. It is read at login into
-`PlayerData.clothing` — the record, `false` when none is stored, or absent when it could not be
-read, which nothing dresses or overwrites. A character's delete is soft, so its row stays; the
-foreign key cascades when the character row is really deleted.
-
-**A database from before this version cannot be upgraded in place.** The table renames
-(`opx77_accounts` → `opx77_users`, `opx77_players` → `opx77_characters`,
-`opx77_player_groups` → `opx77_character_groups`) were made inside migrations 0001–0004 rather
-than added as new ones, so a database created earlier keeps the old tables while the code
-queries the new names. Drop it and let the runner recreate it: there is no automatic migration
-path and none is planned.
+than a column beside `appearance`, so the autosave that rewrites a character row never rewrites
+what it wears. It is read at login into `PlayerData.clothing` — the record, `false` when none is
+stored, or absent when it could not be read, which nothing dresses or overwrites. A character's
+delete is soft, so its row stays; the foreign key cascades when the character row is really
+deleted.
 
 ## Commands
 

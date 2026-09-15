@@ -20,7 +20,7 @@ OPX.UserIdOf = nil
 ---@type boolean|nil
 OPX.Booted = nil
 
---- Why characters cannot be loaded this run ("no database", "migration failed: ..."), or nil.
+--- Why characters cannot be loaded this run ("no database", "schema failed: <table>"), or nil.
 ---@type string|nil
 OPX.BootError = nil
 

@@ -191,7 +191,7 @@ serveur ») ; le gameplay serveur qui a besoin d'`OPX` est un fichier ajouté à
 | `config/` | les seuls fichiers qu'un opérateur édite. Clés `UPPER_SNAKE` |
 | `data/` | métiers, gangs, parcours de vie. Des définitions, pas des réglages |
 | `shared/` | `OPX` lui-même : result, table, string, math, validate, hooks, locales, identifiants citoyens |
-| `server/storage/` | toutes les requêtes SQL, et les migrations |
+| `server/storage/` | toutes les requêtes SQL, et le schéma |
 | `server/` | roster, joueur, groupes, personnages, barrière, événements |
 | `client/` | miroir d'état et surface d'exports |
 
@@ -380,14 +380,14 @@ re-dérive ce qui compte.
 
 ## Le démarrage
 
-Le démarrage (`server/main.lua`) tourne dans son propre thread : les migrations attendent des
+Le démarrage (`server/main.lua`) tourne dans son propre thread : la création des tables attend des
 allers-retours avec la base, et le chunk principal du fichier doit rendre la main tout de suite.
-Il sonde la base, applique les migrations, cherche les ressources en conflit, avertit si
+Il sonde la base, applique le schéma, cherche les ressources en conflit, avertit si
 `DEFAULT_SPAWN.SET` est faux, puis pose `OPX.Booted`.
 
 `OPX.Booted` est posé dans les deux cas : les exports serveur répondent `core.booting` tant que la
 question du schéma n'est pas tranchée, puis répondent, en mode dégradé ou non. `OPX.BootError`
-dit pourquoi le core ne peut pas charger de personnage (`no database`, `migration failed: ...`).
+dit pourquoi le core ne peut pas charger de personnage (`no database`, `schema failed: <table>`).
 
 `warnAboutPlacementConflicts` interroge `GetResourceState` pour chaque nom de
 `CONFLICTING_PLACERS` : c'est le seul moyen de savoir, puisque les ressources serveur ne peuvent
@@ -478,7 +478,7 @@ suppression sont vérifiées par l'appelant.
 `server/storage/vehicles.lua` lit et écrit `opx77_vehicles` sans aucune politique :
 `server/vehicles.lua` décide. L'état (`OPX.Storage.Vehicles.STATE` : `OUT` 0, `STORED` 1,
 `IMPOUNDED` 2) est un nombre et non une chaîne : la colonne est un `TINYINT`, et un mode de jeu
-ajoute ses propres états sans migration. La colonne `body` porte toute la vue des dégâts : carrosserie,
+ajoute ses propres états sans changer la table. La colonne `body` porte toute la vue des dégâts : carrosserie,
 vitres, phares, pneus et `detachedParts`. `OPX.Storage.Vehicles.setState` n'écrit qu'une colonne,
 pour qu'un changement d'état ne réécrive pas une copie périmée de tout le reste ;
 `OPX.Storage.Vehicles.countByOwner` sert au plafond par personnage.
@@ -504,23 +504,25 @@ conteneur.
   nombre de `?` est comparé aux valeurs avant tout envoi.
 - `OPX.Storage.Inventories.delete` supprime un conteneur ; ses piles partent par cascade.
 
-## Les migrations
+## Le schéma
 
-`OPX.Schema` (`server/storage/schema.lua`) liste les migrations, identifiées par leur nom et jamais
-par leur position. Chaque requête y est celle du fichier `sql/` correspondant, et les deux se
-modifient ensemble (README, « The schema ») ; `tools/check_sql_parity.py` le vérifie.
+`OPX.Schema` (`server/storage/schema.lua`) est une seule liste ordonnée d'instructions
+`CREATE TABLE IF NOT EXISTS`, une par table que possède le core, dans l'ordre de leurs clés
+étrangères. `OPX.Storage.applySchema` les exécute toutes à chaque démarrage : une table qui existe
+n'est pas touchée, une table absente est créée. `sql/schema.sql` porte les mêmes instructions,
+commentées, pour un opérateur ; les deux se modifient ensemble. Aucun commentaire n'entre dans les
+chaînes Lua (voir `docs/unknowns.md`, « paramètres nommés »).
 
-`OPX.Storage.migrate` crée d'abord `opx77_migrations`, lit les noms déjà appliqués, puis applique
-les autres dans l'ordre. Il s'arrête au premier échec plutôt que de laisser un schéma à moitié
-appliqué : le démarrage répond alors `migration failed` et le core refuse les connexions contre un
-schéma inconnu.
+Il n'y a pas de migrations, et c'est voulu tant que le projet est en développement : la base est
+recréée à chaque changement de table plutôt que migrée, et une instruction `IF NOT EXISTS` ne
+modifie jamais une table existante. Il n'y a donc ni table d'historique, ni migration optionnelle,
+ni reprise au démarrage suivant.
 
-Une migration marquée `optional` fait exception : 0007_character_clothing l'est, parce qu'une
-tenue ne vaut pas de bloquer tous les joueurs. Son échec est journalisé avec la phrase de son
-champ `optional` (« clothing is neither restored nor saved until it is applied »), le reste du
-démarrage continue, et la migration n'est pas enregistrée : `OPX.Storage.skipped` la retient pour
-la durée de la ressource, le prochain démarrage la retente, et ce qui lit sa table
-(`OPX.Clothing.available`) consulte `skipped` d'abord.
+`OPX.Storage.applySchema` s'arrête à la première instruction qui échoue plutôt que de continuer sur
+un schéma incomplet : le démarrage pose `OPX.BootError = 'schema failed: <table>'` et le core
+refuse les connexions, exactement comme sans base. Les vêtements n'ont plus de régime à part : si
+leur table ne peut pas être créée, personne ne se connecte, au lieu d'un core qui démarre sans
+restaurer ni sauvegarder ce que portent les personnages.
 
 ## Le journal d'audit
 
@@ -1120,7 +1122,7 @@ est une ressource cliente qui capture un instantané et l'envoie ici ; rien d'au
 `server/clothing.lua`. `opx77_appearance` lit l'équipement et la garde-robe du pantin et les
 envoie ici ; rien d'autre ne les écrit. Un enregistrement par personnage dans
 `opx77_character_clothing`, porté dans `PlayerData.clothing` : l'enregistrement, `false` quand
-rien n'est stocké, ou nil quand le core ne peut pas le dire (table absente ou lecture échouée),
+rien n'est stocké, ou nil quand le core ne peut pas le dire (lecture échouée),
 ce que le client lit comme « n'habille rien, ne sauvegarde rien ». L'enregistrement a la forme de
 la plateforme, celle que son service de présentation stocke : neuf emplacements, sept tenues
 qui remplacent les sept emplacements visibles, et la tenue active. Les sous-vêtements se portent

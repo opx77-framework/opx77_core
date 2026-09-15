@@ -130,7 +130,7 @@ silence — et ce thread, c'est en général la connexion d'un joueur.
 > where that scan has been wrong before.
 
 **Ce que fait le core.** `@nom` partout, et aucun commentaire dans une chaîne
-SQL. Y compris dans les migrations, qui n'ont pourtant pas de paramètres : une
+SQL. Y compris dans le schéma, qui n'a pourtant pas de paramètres : une
 requête qui gagne un `?` plus tard ne doit pas être aussi celle qui porte un
 commentaire.
 

@@ -134,70 +134,22 @@ function OPX.Storage.ready()
 end
 
 --- @author DemiAutomatic
---- @type {table<string, boolean>}
---- @description Optional migrations that failed this run, by name.
-Storage.skipped = {}
-
---- @author DemiAutomatic
---- @method OPX.Storage.migrate
---- @description Applies pending migrations in order, keyed by their name.
---- @param migrations {Migration[]}
+--- @method OPX.Storage.applySchema
+--- @description Runs every CREATE TABLE statement in order, stopping at a failure.
+--- @param statements {string[]}
 --- @returns {Result}
-function OPX.Storage.migrate(migrations)
-	local created = Storage.execute([[
-CREATE TABLE IF NOT EXISTS opx77_migrations (
-    name VARCHAR(190) CHARACTER SET ascii COLLATE ascii_bin NOT NULL PRIMARY KEY,
-    applied_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB
-  ]])
-	if not created.ok then
-		Open77.log.error('[storage] cannot create the migration table: ' ..
-			tostring(created.detail))
-		return created
-	end
-
-	local rows = Storage.query('SELECT name FROM opx77_migrations')
-	if not rows.ok then return rows end
-
-	local applied = {}
-	local names = rows.value or {}
-	for i = 1, #names do applied[names[i].name] = true end
-
-	local count = 0
-	for i = 1, #migrations do
-		local migration = migrations[i]
-		if not applied[migration.name] then
-			Open77.log.info(('[storage] applying migration %s'):format(migration.name))
-
-			local statements = migration.statements
-			local failed = false
-			for j = 1, #statements do
-				local run_ = Storage.execute(statements[j])
-				if not run_.ok then
-					if not migration.optional then
-						Open77.log.error(('[storage] migration %s statement %d failed: %s')
-							:format(migration.name, j, tostring(run_.detail)))
-						return Result.err('migration-failed', migration.name)
-					end
-					Open77.log.warn(('[storage] optional migration %s statement %d failed: %s')
-						:format(migration.name, j, tostring(run_.detail)))
-					Open77.log.warn(('[storage] booting without it: %s'):format(migration.optional))
-					Storage.skipped[migration.name] = true
-					failed = true
-					break
-				end
-			end
-
-			if not failed then
-				local recorded = Storage.insert(
-					'INSERT INTO opx77_migrations (name) VALUES (@name)', { name = migration.name })
-				if not recorded.ok then return recorded end
-				count = count + 1
-			end
+function OPX.Storage.applySchema(statements)
+	for i = 1, #statements do
+		local statement = statements[i]
+		local created = Storage.execute(statement)
+		if not created.ok then
+			local tableName = statement:match('CREATE TABLE IF NOT EXISTS ([%w_]+)') or ('#' .. i)
+			Open77.log.error(('[storage] creating %s failed: %s')
+				:format(tableName, tostring(created.detail)))
+			return Result.err('schema-failed', tableName)
 		end
 	end
 
-	Open77.log.info('[storage] ' ..
-		(count == 0 and 'schema is up to date' or ('%d migration(s) applied'):format(count)))
-	return Result.ok(count)
+	Open77.log.info(('[storage] schema ready: %d table(s)'):format(#statements))
+	return Result.ok(#statements)
 end

@@ -16,11 +16,6 @@ local Clothing = OPX.Clothing
 Clothing.VERSION = 1
 
 --- @author DemiAutomatic
---- @type {string}
---- @description The optional migration that creates the clothing table.
-Clothing.MIGRATION = '0007_character_clothing'
-
---- @author DemiAutomatic
 --- @type {string[]}
 --- @description The nine equipment slots, as the platform names them.
 local SLOTS = { 'Head', 'Face', 'InnerChest', 'OuterChest', 'Legs', 'Feet', 'Outfit',
@@ -182,20 +177,11 @@ function OPX.Clothing.same(left, right)
 end
 
 --- @author DemiAutomatic
---- @method OPX.Clothing.available
---- @description Answers whether the clothing migration was not skipped this run.
---- @returns {boolean}
-function OPX.Clothing.available()
-	return OPX.Storage.skipped[Clothing.MIGRATION] ~= true
-end
-
---- @author DemiAutomatic
 --- @method fetch
 --- @description Reads and validates a character's stored clothing record.
 --- @param citizenId {CitizenId}
 --- @returns {Result}
 local function fetch(citizenId)
-	if not Clothing.available() then return Result.err('error.unavailable', 'clothing_table') end
 	local fetched = OPX.Storage.Players.fetchClothing(citizenId)
 	if not fetched.ok then return fetched end
 	if fetched.value == nil then return Result.ok(false) end
@@ -212,11 +198,9 @@ end
 function OPX.Clothing.load(citizenId)
 	local fetched = fetch(citizenId)
 	if fetched.ok then return fetched.value end
-	if Clothing.available() then
-		Open77.log.warn(('[clothing] %s: the stored clothing could not be read (%s: %s); it is ' ..
-			'neither restored nor overwritten this session'):format(citizenId,
-				tostring(fetched.error), tostring(fetched.detail)))
-	end
+	Open77.log.warn(('[clothing] %s: the stored clothing could not be read (%s: %s); it is ' ..
+		'neither restored nor overwritten this session'):format(citizenId,
+			tostring(fetched.error), tostring(fetched.detail)))
 	return nil
 end
 
@@ -234,7 +218,7 @@ function OPX.SaveClothing(identifier, clothing)
 	if not canonical then return Result.err('clothing.invalid', reason) end
 
 	local data = player.PlayerData
-	if data.clothing == nil or not Clothing.available() then
+	if data.clothing == nil then
 		return Result.err('error.unavailable', 'clothing_unavailable')
 	end
 	if Clothing.same(data.clothing, canonical) then return Result.ok(data.clothing) end

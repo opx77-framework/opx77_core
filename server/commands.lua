@@ -219,7 +219,7 @@ register('opx77.create', function(source, args, raw)
 		})
 		OPX.CommandNotice(source, raw, created.ok and 'success' or 'error',
 			created.ok and locale('character.created', { citizenId = created.value.citizenId })
-				or locale(OPX.RefusalKey(created.error)))
+				or locale(OPX.RefusalKey(created.error), { max = created.detail }))
 	end)
 end, false)
 

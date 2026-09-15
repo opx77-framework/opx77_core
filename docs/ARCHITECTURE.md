@@ -1358,10 +1358,6 @@ réserve, même source).
 - `OPX.Vehicles.Give` lève `vehicle.plateExhausted` avec la dernière plaque tirée en détail, et
   ne compte que les échecs contenant `Duplicate` (sensible à la casse), alors que
   `OPX.CreateCharacter` compare `duplicate` en minuscules.
-- `server/commands.lua` : `/opx77.create` sur un compte plein répond le texte brut
-  `You already have {max} characters.` — la commande rend `locale(OPX.RefusalKey(created.error))`
-  sans le paramètre `max`, que la porte réseau `opx77:server:createCharacter` passe bien
-  (constaté dans le transcript du harnais).
 - `server/commands.lua` : `opx77.group` renvoie en cas d'échec le code brut
   (`tostring(members.error)`, par exemple `query-failed`) plutôt qu'une ligne de locale ;
   `opx77.job` et `opx77.gang` ajoutent `detail` à la ligne rendue. Ce sont des commandes ACL,

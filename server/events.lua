@@ -147,8 +147,7 @@ RegisterNetEvent(Events.Server.CREATE_CHARACTER, function(payload)
 		local created = OPX.CreateCharacter(src, payload)
 		if not created.ok then
 			OPX.Refuse(src, created.error, operation)
-			OPX.NotifyLocale(src, created.error,
-				{ max = OPX.TuneNumber('CHARACTER_SLOTS', 1) }, 'error')
+			OPX.NotifyLocale(src, created.error, { max = created.detail }, 'error')
 			return
 		end
 

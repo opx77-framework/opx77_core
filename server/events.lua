@@ -11,30 +11,39 @@ local Events = OPX.Events
 --- @event onPlayerConnected
 --- @description Starts entry for a connecting player, id read from the argument.
 --- @param rawPlayerId {integer|string}
---- @param playerName {string|nil}
-AddEventHandler(Events.Platform.PLAYER_CONNECTED, function(rawPlayerId, playerName)
+AddEventHandler(Events.Platform.PLAYER_CONNECTED, function(rawPlayerId)
 	local source = tonumber(rawPlayerId)
 	if not source or source <= 0 then
 		Open77.log.error(('[events] unusable player id %q on connect'):format(tostring(rawPlayerId)))
 		return
 	end
-	Open77.log.debug(('[events] %s connected as %d'):format(tostring(playerName), source))
 	OPX.Lifecycle.beginEntry(source)
 end)
 
 --- @author DemiAutomatic
 --- @event onPlayerDisconnected
---- @description Tears down everything the core holds for a departing player.
+--- @description Audits a departure and tears down what the core holds for it.
 --- @param rawPlayerId {integer|string}
-AddEventHandler('onPlayerDisconnected', function(rawPlayerId)
+--- @param reason {string|nil}
+AddEventHandler('onPlayerDisconnected', function(rawPlayerId, reason)
 	local source = tonumber(rawPlayerId)
 	if not source then return end
 	local session = OPX.Sessions[source]
 	if session then session.departing = true end
+	local player = OPX.Players[source]
+	local citizenId = player and player.PlayerData.citizenId or nil
+	OPX.Logger.log({
+		event = 'session.disconnect',
+		severity = 'info',
+		source = source,
+		citizenId = citizenId,
+		userId = session and session.userId or nil,
+		message = reason or 'connection_closed',
+	})
 	OPX.Logout(source)
 	OPX.ForgetSession(source)
 	OPX.ForgetCooldowns(source)
-	OPX.Logger.forget(source)
+	OPX.Logger.forget(source, citizenId)
 end)
 
 --- @author DemiAutomatic

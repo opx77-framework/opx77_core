@@ -107,6 +107,8 @@ function OPX.Lifecycle.beginEntry(source)
 		refuseEntry(source, 'entry.noIdentity', 'no-identity')
 		return
 	end
+	Open77.log.debug(('[lifecycle] %s (%s) connected as %d')
+		:format(session.displayName, session.userId, source))
 
 	Lifecycle.hold(source, 'opx77_character_selection')
 

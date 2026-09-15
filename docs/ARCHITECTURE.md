@@ -659,15 +659,21 @@ prochain joueur à porter cet identifiant, ou avalerait son premier toast.
 l'attaquant ; seul `source` ne se falsifie pas.
 
 - **`onPlayerConnected`** est un événement diffusé par l'hôte : `source` n'y est pas renseigné,
-  l'identifiant arrive donc en argument, et sous forme de chaîne. Un identifiant inutilisable
-  (non numérique, ou ≤ 0) est journalisé et ignoré.
-- **Le départ** (`onPlayerDisconnected`) est au mieux : un départ que personne ne
-  signale est couvert par la revérification du `userId` dans `OPX.EnsureSession`, et
+  l'identifiant arrive donc en argument, et sous forme de chaîne. Il ne porte rien d'autre : le
+  nom et le compte de la ligne de connexion sont lus dans la session, que
+  `OPX.Lifecycle.beginEntry` vient de créer. Un identifiant inutilisable (non numérique, ou ≤ 0)
+  est journalisé et ignoré.
+- **Le départ** (`onPlayerDisconnected(playerId, reason)`) est au mieux : un départ que personne
+  ne signale est couvert par la revérification du `userId` dans `OPX.EnsureSession`, et
   `OPX.Logout` est idempotent. La session est marquée `departing` **avant** la déconnexion du
   personnage : un joueur sur le départ n'est pas remis dans un bucket de sélection, et l'hôte
-  supprime de lui-même le bucket d'un joueur parti. Le gestionnaire vide ensuite les cooldowns
-  (`OPX.ForgetCooldowns`) et la déduplication de l'audit (`OPX.Logger.forget`), toutes deux
-  indexées par source, alors qu'une source est recyclée.
+  supprime de lui-même le bucket d'un joueur parti. Une ligne d'audit `session.disconnect` porte
+  `reason` (`connection_closed` pour un joueur parti ou un lien perdu, sinon le texte donné à
+  `disconnect`, `kick` ou `ban`), pour distinguer un départ d'une expulsion. L'identifiant
+  citoyen est lu **avant** `OPX.Logout`, qui le retire. Le gestionnaire vide ensuite les cooldowns
+  (`OPX.ForgetCooldowns`) et la déduplication de l'audit (`OPX.Logger.forget`), indexées par
+  source, alors qu'une source est recyclée ; l'identifiant citoyen lu plus tôt est passé à
+  `OPX.Logger.forget` pour les entrées indexées par personnage.
 - **`onPlayerReady`** : un `detail` de la forme `liveness_lost:<res>[,<res>...]` veut dire qu'une
   retenue a dépassé son échéance de vivacité et que la plateforme a conclu que son détenteur
   avait disparu. Si `opx77_core` figure dans la liste, la ligne d'avertissement dit que le joueur

@@ -1359,7 +1359,9 @@ réponse, pas une pile.
 
 `toast` enveloppe l'appel `Open77.exports.call` dans un `pcall`, mais l'enveloppe s'arrête là :
 `await` cède la main, et un `yield` n'est pas sûr sous un `pcall`. La promesse est testée par
-présence, jamais par son type Lua : c'est un userdata, pas une table. L'échec d'un toast n'est
+présence, jamais par son type Lua : c'est un userdata, pas une table. Une réponse sans
+`ok = true` est un refus, pas seulement `ok = false` : une table sans `ok` n'a rien affiché, et
+la ligne de chat prend le relais. L'échec d'un toast n'est
 journalisé qu'une fois (`toastReported`), pas une fois par réponse.
 
 ## Les exports client

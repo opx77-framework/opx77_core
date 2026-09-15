@@ -166,7 +166,7 @@ local function toast(definition)
 	local result, callError = promise:await()
 	if callError then return tostring(callError) end
 	if type(result) ~= 'table' then return 'malformed_answer' end
-	if result.ok == false then return tostring(result.error or 'refused') end
+	if result.ok ~= true then return tostring(result.error or 'refused') end
 	return nil
 end
 

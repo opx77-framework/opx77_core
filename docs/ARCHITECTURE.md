@@ -695,7 +695,10 @@ l'attaquant ; seul `source` ne se falsifie pas.
   est : après un rechargement, c'est tout le monde qui jouait.
 - **`opx77:server:selectCharacter`** : un refus n'est journalisé que s'il n'est pas
   `error.tooFast`. La branche du cooldown est justement celle que prend un attaquant ; la
-  journaliser ferait de la limite un écrivain d'une ligne par message.
+  journaliser ferait de la limite un écrivain d'une ligne par message. Le refus part sur le fil
+  seulement, sans toast : `opx77_charselector` le rend déjà dans sa ligne d'état, et le même
+  texte en toast le disait deux fois. `opx77:server:createCharacter` garde son toast à côté du
+  refus : `opx77_charcreator` s'en sert quand son formulaire est déjà fermé.
 - **`opx77:server:reportPosition`** est un indice. Seul le cap est conservé : x, y et z sont
   re-dérivés de l'instantané serveur au moment de la sauvegarde, donc un client qui ment sur eux
   ne ment à personne. Le cooldown est un littéral (1000 ms) et non

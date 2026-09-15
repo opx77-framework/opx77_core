@@ -250,6 +250,10 @@ client waiting on one of several requests must branch on it: `error.tooFast` is 
 them, and without the operation a satellite cannot tell whose answer arrived. A handler that only reads
 `code` keeps working — the field was added after `code` and `kind`.
 
+A refused `selectCharacter` is answered on this event only: the selector renders it. A refused
+`createCharacter` or `spawnVehicle` also raises a toast with the same text, for a client whose
+form is already gone.
+
 The `code` is always a key the core's catalogue carries. A refusal whose underlying cause has
 no entry — a storage failure answering `query-failed`, a validator answering `too-short` — is
 logged with its real code and sent as `error.unavailable`, so `locale(code)` never renders a

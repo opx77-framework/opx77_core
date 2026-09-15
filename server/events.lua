@@ -116,7 +116,6 @@ RegisterNetEvent(Events.Server.SELECT_CHARACTER, function(payload)
 					:format(src, OPX.Logger.safe(citizenId), tostring(selected.error)))
 			end
 			OPX.Refuse(src, selected.error, operation)
-			OPX.NotifyLocale(src, selected.error, nil, 'error')
 		end
 	end)
 end)
